@@ -1,0 +1,6 @@
+{
+  "name": "MikroWatch",
+  "description": "Sistema de monitoreo para Mikrotik con integración de Telegram. Recibe notificaciones via Netwatch y las reenvía a Telegram.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
