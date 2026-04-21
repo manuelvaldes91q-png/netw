@@ -27,7 +27,10 @@ export default function App() {
 
   // Categorize nodes
   const wanNodes = data.current.filter(n => n.host.toUpperCase().includes('WAN'));
-  const antennaNodes = data.current.filter(n => !n.host.toUpperCase().includes('WAN'));
+  const antennaNodes = data.current.filter(n => 
+    !n.host.toUpperCase().includes('WAN') && 
+    n.host !== 'MIKROTIK_SYSTEM'
+  );
   const otherNodes = data.current.filter(n => !wanNodes.includes(n) && !antennaNodes.includes(n));
 
   const formatVE = (dateStr?: string) => {
@@ -135,14 +138,14 @@ export default function App() {
             </div>
             
             {/* HEARTBEAT INDICATOR */}
-            <div className={`hidden xs:flex items-center gap-2 border-l border-white/10 pl-4 transition-all duration-500 ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'opacity-100' : 'opacity-40'}`}>
-               <Activity className={`w-3 h-3 ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'text-red-500 animate-pulse' : 'text-neon-green animate-pulse'}`} />
+            <div className={`flex items-center gap-2 border-l border-white/10 pl-3 sm:pl-4 transition-all duration-500 ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'opacity-100' : 'opacity-40'}`}>
+               <Activity className={`w-3 h-3 sm:w-4 sm:h-4 ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'text-red-500 animate-pulse' : 'text-neon-green animate-pulse'}`} />
                <div className="flex flex-col">
-                  <span className={`text-[7px] font-black tracking-tighter ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'text-red-500' : 'text-neon-green'}`}>
+                  <span className={`text-[6px] sm:text-[8px] font-black tracking-tighter leading-none ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'text-red-500' : 'text-neon-green'}`}>
                     SYSTEM_PULSE: {mikrotikSystem?.status.toUpperCase() || 'WAITING'}
                   </span>
                   {mikrotikSystem && (
-                    <span className="text-[6px] opacity-60">LAST: {formatVE(mikrotikSystem.timestamp)}</span>
+                    <span className="text-[5px] sm:text-[7px] opacity-60 leading-none mt-0.5">LAST: {formatVE(mikrotikSystem.timestamp)}</span>
                   )}
                </div>
             </div>
