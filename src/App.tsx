@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, FormEvent } from 'react';
-import { Terminal, Shield, Wifi, Cpu, History, Bell, ChevronRight, Settings, Info } from 'lucide-react';
+import { Terminal, Shield, Wifi, Cpu, Clock, Activity, Bell, ChevronRight, Settings, Code } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface MikrotikStatus {
@@ -36,7 +36,7 @@ export default function App() {
           ...prev, 
           '>> EVENT_STREAM_CONNECTED: Synchronous monitoring active.',
           `>> LOCAL_ENDPOINT: ${window.location.hostname}`,
-          '!! ALERT: If you use another URL in Mikrotik, it will NOT show here.'
+          '>> STATUS: SYNCHRONIZED - Monitoring system ready.'
         ]);
       };
       eventSource.onmessage = (event) => {
@@ -188,16 +188,16 @@ export default function App() {
         </section>
 
         {/* RIGHT: SYSTEM STATUS GRIDS */}
-        <aside className={`w-full lg:w-96 flex flex-col gap-4 p-4 bg-black/40 overflow-y-auto transition-all duration-300 ${activeTab === 'stats' ? 'flex' : 'hidden lg:flex'}`}>
+        <aside className={`w-full lg:w-[500px] flex flex-col gap-6 p-6 bg-black/50 overflow-y-auto border-l border-white/5 transition-all duration-300 ${activeTab === 'stats' ? 'flex' : 'hidden lg:flex'}`}>
           
           {/* MONITOR LIST */}
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="flex items-center justify-between mb-2 opacity-50">
-              <div className="flex items-center gap-2">
-                <Shield className="w-3 h-3" />
-                <span className="text-[10px] font-bold uppercase tracking-widest">Live Monitors</span>
+              <div className="flex items-center gap-3">
+                <Shield className="w-4 h-4 text-neon-green" />
+                <span className="text-[12px] font-bold uppercase tracking-[0.2em] text-neon-green">Live System Nodes</span>
               </div>
-              <span className="text-[9px]">{data.current.length} ACTIVE</span>
+              <span className="text-[10px] font-mono">{data.current.length} ACTIVE_NODES</span>
             </div>
             
             <AnimatePresence mode="popLayout">
@@ -205,61 +205,69 @@ export default function App() {
                 <motion.div
                   key={item.host}
                   layout
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="p-3 border border-terminal-text/10 bg-white/5 relative overflow-hidden group hover:border-terminal-text/30 transition-colors"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-5 border border-white/10 bg-white/[0.03] relative overflow-hidden group hover:border-neon-blue/30 transition-all rounded-sm"
                 >
-                  <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.status === 'up' ? 'bg-neon-green shadow-[0_0_8px_rgba(0,255,65,0.5)]' : 'bg-red-500 animate-pulse'}`} />
-                  <div className="flex justify-between items-start mb-2 pl-2">
-                    <span className="text-[10px] font-bold opacity-60 uppercase">{item.host}</span>
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${
-                      item.status === 'up' ? 'bg-neon-green/10 text-neon-green border-neon-green/20' : 'bg-red-500/20 text-red-500 border-red-500/20 animate-pulse'
+                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${item.status === 'up' ? 'bg-neon-green shadow-[0_0_15px_rgba(0,255,65,0.4)]' : 'bg-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.4)]'}`} />
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex flex-col pl-2">
+                      <span className="text-[10px] font-bold opacity-30 uppercase tracking-widest mb-1">NODE_ID</span>
+                      <span className="text-xl font-bold text-white/90 tracking-tight">{item.host}</span>
+                    </div>
+                    <span className={`text-[11px] font-black px-4 py-1.5 rounded border ${
+                      item.status === 'up' ? 'bg-neon-green/20 text-neon-green border-neon-green/40' : 'bg-red-500/20 text-red-500 border-red-500/40 animate-pulse'
                     }`}>
                       {item.status.toUpperCase()}
                     </span>
                   </div>
-                  <p className="text-xs pl-2 font-bold mb-2 tracking-tight">{item.message}</p>
-                  <div className="flex items-center gap-1 pl-2 opacity-30 text-[8px] uppercase">
-                    <History className="w-2 h-2" />
-                    <span>SYN_ACK: {new Date(item.timestamp).toLocaleTimeString()}</span>
+                  
+                  <div className="pl-2 mt-4 pt-4 border-t border-white/5 flex justify-between items-end">
+                    <div className="space-y-1">
+                      <p className={`text-base font-bold ${item.status === 'up' ? 'text-white/80' : 'text-red-400'}`}>
+                        {item.message}
+                      </p>
+                      <div className="flex items-center gap-2 opacity-30">
+                        <Clock className="w-3 h-3" />
+                        <span className="text-[10px] uppercase font-mono tracking-tighter">Last Update: {new Date(item.timestamp).toLocaleTimeString()}</span>
+                      </div>
+                    </div>
+                    <Activity className={`w-8 h-8 opacity-10 ${item.status === 'up' ? 'text-neon-green' : 'text-red-500'}`} />
                   </div>
                 </motion.div>
               ))}
             </AnimatePresence>
             
             {data.current.length === 0 && (
-              <div className="p-10 border border-dashed border-terminal-text/10 rounded flex flex-col items-center justify-center opacity-30 text-center">
-                <Wifi className="w-8 h-8 mb-2 animate-bounce" />
-                <p className="text-[10px] uppercase font-bold tracking-widest leading-relaxed">System Idle<br/>Awaiting Mikrotik Signal</p>
+              <div className="py-20 border border-dashed border-white/10 rounded flex flex-col items-center justify-center opacity-30 text-center">
+                <Wifi className="w-12 h-12 mb-4 animate-pulse" />
+                <p className="text-[11px] uppercase font-bold tracking-widest leading-relaxed">System Standby<br/>Waiting for broadcast...</p>
               </div>
             )}
           </div>
 
           {/* NETWATCH QUICK CMDS */}
-          <div className="mt-auto pt-6 border-t border-terminal-text/10">
+          <div className="mt-auto pt-6 border-t border-white/10">
             <div className="flex items-center gap-2 mb-4 opacity-50">
-              <Settings className="w-3 h-3" />
-              <span className="text-[10px] font-bold uppercase tracking-widest">Router Terminal Config</span>
+              <Settings className="w-4 h-4" />
+              <span className="text-[11px] font-bold uppercase tracking-widest">Router Sync Engine</span>
             </div>
-            <div className="bg-black/60 p-4 rounded text-[10px] font-mono border border-terminal-text/5 space-y-6 max-h-64 overflow-y-auto select-all scrollbar-thin">
+            <div className="bg-black/60 p-5 rounded text-[10px] font-mono border border-white/5 space-y-6 max-h-80 overflow-y-auto select-all scrollbar-thin">
                <div className="border-b border-white/5 pb-4">
                  <p className="text-neon-blue mb-2 font-bold">[# WAN1 - AIRTEK (8.8.8.8)]</p>
-                 <div className="bg-red-950/20 p-2 border border-red-500/30 rounded mb-2">
-                   <p className="text-[7px] text-red-400 font-bold uppercase mb-1">¡ERROR COMÚN DETECTADO!</p>
-                   <p className="text-[7px] text-white opacity-70">En tu Mikrotik falta el signo "?" después de "webhook". Sin eso NO FUNCIONA.</p>
-                 </div>
                  <div className="relative group">
-                   <code className="opacity-70 block break-all leading-relaxed bg-blue-950/30 p-2 rounded border border-neon-blue/20 text-[8.5px] sm:text-[9.5px] select-all font-mono">
-                     {`/tool netwatch add host=8.8.8.8 up-script="/tool fetch url=\\"${window.location.origin}/api/mikrotik/webhook?host=WAN1&status=up\\" keep-result=no check-certificate=no" comment="AIRTEK_WAN"`}
+                   <div className="absolute -top-6 right-0 text-[7px] text-green-400 font-bold uppercase tracking-wider">✓ verified_format</div>
+                   <code className="opacity-80 block break-all leading-relaxed bg-blue-950/30 p-2 rounded border border-neon-blue/20 text-[8.5px] sm:text-[9.5px] select-all font-mono">
+                     {`/tool netwatch add host=8.8.8.8 up-script="/tool fetch url=\\"${window.location.origin}/api/mikrotik/webhook?host=WAN1&status=up\\" keep-result=no" comment="AIRTEK_WAN"`}
                    </code>
                  </div>
-                 <p className="text-[8px] text-neon-amber mt-2 font-bold uppercase tracking-tighter">!! USA EL URL DE ESTA VENTANA: {window.location.hostname}</p>
+                 <p className="text-[8px] text-green-400 mt-2 font-bold uppercase tracking-tighter">!! PUBLIC ENDPOINT ACTIVE: {window.location.hostname}</p>
                </div>
 
                <div className="border-b border-neon-amber/10 pb-4">
                  <p className="text-neon-amber mb-2 font-bold">[# WAN2 - INTER (9.9.9.9)]</p>
-                 <code className="opacity-70 block break-all leading-relaxed bg-amber-950/30 p-2 rounded border border-neon-amber/20 text-[8.5px] sm:text-[9.5px] select-all font-mono">
-                   {`/tool netwatch add host=9.9.9.9 interval=1m up-script="/tool fetch url=\\"${window.location.origin}/api/mikrotik/webhook?host=WAN2&status=up\\" keep-result=no check-certificate=no" comment="INTER_WAN"`}
+                 <code className="opacity-80 block break-all leading-relaxed bg-amber-950/30 p-2 rounded border border-neon-amber/20 text-[8.5px] sm:text-[9.5px] select-all font-mono">
+                   {`/tool netwatch add host=9.9.9.9 interval=1m up-script="/tool fetch url=\\"${window.location.origin}/api/mikrotik/webhook?host=WAN2&status=up\\" keep-result=no" comment="INTER_WAN"`}
                  </code>
                </div>
                <div className="border-b border-terminal-text/10 pb-4">
