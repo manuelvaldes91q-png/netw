@@ -3,11 +3,13 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import fs from 'fs';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const LOGS_FILE = path.join(process.cwd(), 'monitoring_logs.json');
 
 interface MikrotikStatus {
   host: string;
@@ -19,9 +21,37 @@ interface MikrotikStatus {
 // In-memory store for monitoring state
 let currentStatuses: Record<string, MikrotikStatus> = {};
 let logs: MikrotikStatus[] = [];
+
+// Initialize state from file if exists
+try {
+  if (fs.existsSync(LOGS_FILE)) {
+    const data = JSON.parse(fs.readFileSync(LOGS_FILE, 'utf8'));
+    currentStatuses = data.currentStatuses || {};
+    logs = data.logs || [];
+    console.log(`[PERSISTENCE] Loaded ${logs.length} logs from disk.`);
+  }
+} catch (err) {
+  console.error('[PERSISTENCE] Error loading logs:', err);
+}
+
 let clients: any[] = [];
 let lastHeartbeat: string | null = null;
 let heartbeatTimeout: NodeJS.Timeout | null = null;
+
+function persistState() {
+  try {
+    // 15 days retention policy
+    const fifteenDaysAgo = new Date();
+    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+
+    logs = logs.filter(log => new Date(log.timestamp) > fifteenDaysAgo);
+
+    const data = JSON.stringify({ currentStatuses, logs }, null, 2);
+    fs.writeFileSync(LOGS_FILE, data);
+  } catch (err) {
+    console.error('[PERSISTENCE] Error saving logs:', err);
+  }
+}
 
 function broadcastStatus() {
   const data = JSON.stringify({
@@ -150,7 +180,8 @@ async function startServer() {
     // Update state
     currentStatuses[logEntry.host] = logEntry;
     logs.unshift(logEntry);
-    if (logs.length > 100) logs.pop();
+    
+    persistState();
 
     // Notify via Telegram
     const emoji = logEntry.status === 'up' ? '✅' : '❌';
@@ -206,7 +237,7 @@ async function startServer() {
        };
        currentStatuses[logEntry.host] = logEntry;
        logs.unshift(logEntry);
-       if (logs.length > 100) logs.pop();
+       persistState();
        
        const emoji = logEntry.status === 'up' ? '✅' : '❌';
        const telegramMessage = `${emoji} <b>MikroWatch Alert (Typo Fix)</b>\n\n` +
@@ -235,6 +266,7 @@ async function startServer() {
       timestamp: lastHeartbeat
     };
 
+    persistState();
     broadcastStatus();
     res.json({ status: 'ok', serverTime: lastHeartbeat });
   });
@@ -258,6 +290,7 @@ async function startServer() {
       timestamp: lastHeartbeat
     };
 
+    persistState();
     broadcastStatus();
     res.json({ status: 'ok', warning: 'Please add ? before host= in your Heartbeat URL', serverTime: lastHeartbeat });
   });
