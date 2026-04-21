@@ -7,6 +7,7 @@ interface MikrotikStatus {
   status: 'up' | 'down';
   message: string;
   timestamp: string;
+  uptime?: number;
 }
 
 interface MonitorData {
@@ -244,15 +245,39 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between sm:justify-end gap-6">
-                          <p className={`text-xs sm:text-sm font-bold ${item.status === 'up' ? 'text-white/60' : 'text-red-400'}`}>
-                            {item.message}
-                          </p>
-                          <span className={`text-[10px] sm:text-xs font-black px-4 py-1.5 rounded border tracking-widest ${
-                            item.status === 'up' ? 'bg-neon-green/10 text-neon-green border-neon-green/30' : 'bg-red-500/10 text-red-500 border-red-500/30 animate-pulse'
-                          }`}>
-                            {item.status.toUpperCase()}
-                          </span>
+                        <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-8 min-w-0 flex-1">
+                          {/* UPTIME GAUGE */}
+                          <div className="flex flex-col items-center sm:items-end gap-1">
+                            <span className="text-[8px] sm:text-[9px] font-black opacity-30 tracking-[0.2em]">AVAILABILITY_15D</span>
+                            <div className="flex items-center gap-2">
+                               <div className="hidden xs:block h-1 w-16 sm:w-24 bg-white/5 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full transition-all duration-1000 ${
+                                      (item.uptime || 0) > 99 ? 'bg-neon-green' : 
+                                      (item.uptime || 0) > 95 ? 'bg-neon-amber' : 'bg-red-500'
+                                    }`} 
+                                    style={{ width: `${item.uptime || 0}%` }} 
+                                  />
+                               </div>
+                               <span className={`text-xs sm:text-lg font-mono font-black ${
+                                 (item.uptime || 0) > 99 ? 'text-neon-green' : 
+                                 (item.uptime || 0) > 95 ? 'text-neon-amber' : 'text-red-500'
+                               }`}>
+                                 {item.uptime !== undefined ? `${item.uptime}%` : '---'}
+                               </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-6">
+                            <p className={`hidden md:block text-xs sm:text-sm font-bold max-w-[150px] truncate ${item.status === 'up' ? 'text-white/60' : 'text-red-400'}`}>
+                              {item.message}
+                            </p>
+                            <span className={`text-[10px] sm:text-xs font-black px-4 py-1.5 rounded border tracking-widest ${
+                              item.status === 'up' ? 'bg-neon-green/10 text-neon-green border-neon-green/30' : 'bg-red-500/10 text-red-500 border-red-500/30 animate-pulse'
+                            }`}>
+                              {item.status.toUpperCase()}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </motion.div>

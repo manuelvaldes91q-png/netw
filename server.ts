@@ -53,9 +53,56 @@ function persistState() {
   }
 }
 
+function calculateUptime(host: string): number {
+  const hostLogs = logs
+    .filter(l => l.host === host)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  if (hostLogs.length < 2) return currentStatuses[host]?.status === 'up' ? 100 : 0;
+
+  const now = new Date().getTime();
+  const startTime = new Date(hostLogs[0].timestamp).getTime();
+  const totalTime = now - startTime;
+  
+  if (totalTime <= 0) return 100;
+
+  let totalDownTime = 0;
+  let downStart: number | null = null;
+
+  // If the very first state we ever saw was down, start counting from then
+  if (hostLogs[0].status === 'down') {
+    downStart = startTime;
+  }
+
+  for (let i = 1; i < hostLogs.length; i++) {
+    const log = hostLogs[i];
+    const logTime = new Date(log.timestamp).getTime();
+
+    if (log.status === 'down' && downStart === null) {
+      downStart = logTime;
+    } else if (log.status === 'up' && downStart !== null) {
+      totalDownTime += logTime - downStart;
+      downStart = null;
+    }
+  }
+
+  // If currently down, add time since the last down log until now
+  if (downStart !== null) {
+    totalDownTime += now - downStart;
+  }
+
+  const uptimePercent = ((totalTime - totalDownTime) / totalTime) * 100;
+  return Math.min(100, Math.max(0, parseFloat(uptimePercent.toFixed(2))));
+}
+
 function broadcastStatus() {
+  const currentWithUptime = Object.values(currentStatuses).map(n => ({
+    ...n,
+    uptime: calculateUptime(n.host)
+  }));
+
   const data = JSON.stringify({
-    current: Object.values(currentStatuses),
+    current: currentWithUptime,
     logs: logs.slice(0, 50),
     config: {
       telegramConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
@@ -323,8 +370,13 @@ async function startServer() {
 
   // API to get current status and logs for the frontend (fallback)
   app.get('/api/status', (req, res) => {
+    const currentWithUptime = Object.values(currentStatuses).map(n => ({
+      ...n,
+      uptime: calculateUptime(n.host)
+    }));
+
     res.json({
-      current: Object.values(currentStatuses),
+      current: currentWithUptime,
       logs: logs.slice(0, 50),
       config: {
         telegramConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
