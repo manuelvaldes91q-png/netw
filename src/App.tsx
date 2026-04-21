@@ -205,45 +205,59 @@ export default function App() {
               </div>
               
               <div className="flex-1 overflow-y-auto scrollbar-thin pr-1 flex flex-col gap-3 sm:gap-4">
-                {wanNodes.map((item) => (
-                  <motion.div
-                    key={item.host}
-                    layout
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="w-full p-5 sm:p-7 border border-white/10 bg-white/[0.03] relative overflow-hidden group rounded-sm shadow-2xl hover:border-neon-green/30 transition-colors"
-                  >
-                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${item.status === 'up' ? 'bg-neon-green shadow-[0_0_20px_rgba(0,255,65,0.4)]' : 'bg-red-500 animate-pulse shadow-[0_0_30px_rgba(239,68,68,0.6)]'}`} />
-                    
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 sm:gap-0">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm sm:text-xl font-black text-white tracking-[0.1em] uppercase">{item.host}</span>
-                        <div className="flex items-center gap-3">
-                           <div className="flex items-center gap-1.5 opacity-40">
-                             <Clock className="w-3.5 h-3.5" />
-                             <span className="text-[10px] sm:text-xs font-mono">{formatVE(item.timestamp)}</span>
-                           </div>
-                           <span className="text-white/10 text-[10px]">|</span>
-                           <div className="flex items-center gap-1.5 opacity-40">
-                             <Info className="w-3.5 h-3.5" />
-                             <span className="text-[10px] sm:text-xs uppercase font-bold tracking-tighter">Verified</span>
-                           </div>
+                {wanNodes.map((item) => {
+                  const ispLabel = item.host.toUpperCase().includes('WAN1') ? 'AIRTEK' : 
+                                  item.host.toUpperCase().includes('WAN2') ? 'INTER' : null;
+                  
+                  return (
+                    <motion.div
+                      key={item.host}
+                      layout
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="w-full p-5 sm:p-7 border border-white/10 bg-white/[0.03] relative overflow-hidden group rounded-sm shadow-2xl hover:border-neon-green/30 transition-colors"
+                    >
+                      <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${item.status === 'up' ? 'bg-neon-green shadow-[0_0_20px_rgba(0,255,65,0.4)]' : 'bg-red-500 animate-pulse shadow-[0_0_30px_rgba(239,68,68,0.6)]'}`} />
+                      
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 sm:gap-0">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm sm:text-xl font-black text-white tracking-[0.1em] uppercase">{item.host}</span>
+                            {ispLabel && (
+                              <span className="text-[9px] sm:text-[10px] font-black px-2 py-0.5 bg-white/5 border border-white/10 rounded text-white/40 tracking-widest">
+                                {ispLabel}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                             <div className="flex items-center gap-1.5 opacity-40">
+                               <Clock className="w-3.5 h-3.5" />
+                               <span className="text-[10px] sm:text-xs font-mono">{formatVE(item.timestamp)}</span>
+                             </div>
+                             <span className="text-white/10 text-[10px]">|</span>
+                             <div className="flex items-center gap-1.5 opacity-40">
+                               <Info className="w-3.5 h-3.5" />
+                               <span className="text-[10px] sm:text-xs uppercase font-bold tracking-tighter">
+                                 {item.host.includes('1') ? '8.8.8.8' : '9.9.9.9'}
+                               </span>
+                             </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-6">
+                          <p className={`text-xs sm:text-sm font-bold ${item.status === 'up' ? 'text-white/60' : 'text-red-400'}`}>
+                            {item.message}
+                          </p>
+                          <span className={`text-[10px] sm:text-xs font-black px-4 py-1.5 rounded border tracking-widest ${
+                            item.status === 'up' ? 'bg-neon-green/10 text-neon-green border-neon-green/30' : 'bg-red-500/10 text-red-500 border-red-500/30 animate-pulse'
+                          }`}>
+                            {item.status.toUpperCase()}
+                          </span>
                         </div>
                       </div>
-
-                      <div className="flex items-center justify-between sm:justify-end gap-6">
-                        <p className={`text-xs sm:text-sm font-bold ${item.status === 'up' ? 'text-white/60' : 'text-red-400'}`}>
-                          {item.message}
-                        </p>
-                        <span className={`text-[10px] sm:text-xs font-black px-4 py-1.5 rounded border tracking-widest ${
-                          item.status === 'up' ? 'bg-neon-green/10 text-neon-green border-neon-green/30' : 'bg-red-500/10 text-red-500 border-red-500/30 animate-pulse'
-                        }`}>
-                          {item.status.toUpperCase()}
-                        </span>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  );
+                })}
 
                 {wanNodes.length === 0 && (
                   <div className="flex-1 flex flex-col items-center justify-center opacity-20 py-20 grayscale">
