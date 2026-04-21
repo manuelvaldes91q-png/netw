@@ -239,6 +239,29 @@ async function startServer() {
     res.json({ status: 'ok', serverTime: lastHeartbeat });
   });
 
+  // TYPO HANDLER for Heartbeat (catches /api/mikrotik/heartbeathost=...)
+  app.get('/api/mikrotik/heartbeathost=:data', (req, res) => {
+    const data = req.params.data;
+    lastHeartbeat = new Date().toISOString();
+    
+    let hostName = 'MIKROTIK_SYSTEM';
+    if (data.includes('=')) {
+      hostName = data.split('=')[1] || 'MIKROTIK_SYSTEM';
+    } else {
+      hostName = data;
+    }
+
+    currentStatuses[hostName] = {
+      host: hostName,
+      status: 'up',
+      message: 'System alive (Typo Heartbeat OK)',
+      timestamp: lastHeartbeat
+    };
+
+    broadcastStatus();
+    res.json({ status: 'ok', warning: 'Please add ? before host= in your Heartbeat URL', serverTime: lastHeartbeat });
+  });
+
   // SSE endpoint for real-time updates
   app.get('/api/events', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
