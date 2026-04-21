@@ -27,16 +27,7 @@ export default function App() {
 
   // Categorize nodes
   const wanNodes = data.current.filter(n => n.host.toUpperCase().includes('WAN'));
-  const antennaNodes = data.current.filter(n => 
-    n.host.toUpperCase().includes('ANTEN') || 
-    n.host.toUpperCase().includes('MAP') || 
-    n.host.toUpperCase().includes('CPE') ||
-    n.host.toUpperCase().includes('AP-') ||
-    n.host.toUpperCase().includes('RAD') ||
-    n.host.toUpperCase().includes('LINK') ||
-    n.host.toUpperCase().includes('TX') ||
-    n.host.toUpperCase().includes('RX')
-  );
+  const antennaNodes = data.current.filter(n => !n.host.toUpperCase().includes('WAN'));
   const otherNodes = data.current.filter(n => !wanNodes.includes(n) && !antennaNodes.includes(n));
 
   useEffect(() => {
@@ -207,11 +198,18 @@ export default function App() {
               {/* ANTENNA MONITORING */}
               <section className="flex-1 flex flex-col p-3 sm:p-5 overflow-y-auto border-r border-white/5 scrollbar-thin">
                 <div className="flex items-center justify-between mb-4 sm:mb-5 opacity-50 px-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <Wifi className="w-4 h-4 text-neon-blue" />
                     <span className="text-[10px] sm:text-[13px] font-black uppercase tracking-[0.2em] text-neon-blue">Antenna_NOC_Grid</span>
                   </div>
-                  <span className="text-[8px] font-mono">{antennaNodes.length}_TOTAL</span>
+                  <div className="flex items-center gap-4">
+                    <span className="text-[8px] font-mono text-neon-blue opacity-50">{antennaNodes.length}_TOTAL</span>
+                    {antennaNodes.filter(n => n.status === 'down').length > 0 && (
+                      <span className="text-[8px] font-mono text-red-500 animate-pulse border border-red-500/30 px-2 py-0.5 rounded bg-red-500/10">
+                        {antennaNodes.filter(n => n.status === 'down').length}_DOWN
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3">
@@ -221,20 +219,22 @@ export default function App() {
                       layout
                       initial={{ opacity: 0, scale: 0.98 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="p-3 border border-white/10 bg-black/40 relative overflow-hidden rounded-sm group hover:border-neon-blue/40 transition-all"
+                      className={`p-3 border relative overflow-hidden rounded-sm group transition-all ${
+                        item.status === 'up' ? 'border-white/10 bg-black/40 hover:border-neon-blue/40' : 'border-red-500/40 bg-red-950/20 shadow-[0_0_15px_rgba(239,68,68,0.15)]'
+                      }`}
                     >
-                      <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.status === 'up' ? 'bg-neon-blue shadow-[0_0_10px_rgba(0,163,255,0.4)]' : 'bg-red-500 animate-pulse'}`} />
+                      <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.status === 'up' ? 'bg-neon-blue shadow-[0_0_10px_rgba(0,163,255,0.4)]' : 'bg-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.6)]'}`} />
                       <div className="flex justify-between items-start mb-1.5">
-                         <span className="text-[10px] sm:text-xs font-black text-white/90 truncate pr-1" title={item.host}>{item.host}</span>
+                         <span className={`text-[10px] sm:text-xs font-black truncate pr-1 ${item.status === 'up' ? 'text-white/90' : 'text-red-400'}`} title={item.host}>{item.host}</span>
                          <span className={`text-[7px] sm:text-[8px] font-black px-1 rounded ${
-                           item.status === 'up' ? 'text-neon-blue' : 'text-red-500 animate-pulse'
+                           item.status === 'up' ? 'text-neon-blue font-bold shadow-[0_0_5px_rgba(0,163,255,0.5)]' : 'text-white bg-red-600 animate-pulse px-1.5'
                          }`}>
                            {item.status.toUpperCase()}
                          </span>
                       </div>
                       <div className="flex justify-between items-end">
                         <div className="space-y-0.5 max-w-[70%]">
-                          <p className={`text-[8px] sm:text-[10px] font-bold truncate ${item.status === 'up' ? 'text-white/40' : 'text-red-400'}`}>{item.message}</p>
+                          <p className={`text-[8px] sm:text-[10px] font-bold truncate ${item.status === 'up' ? 'text-white/40' : 'text-red-500'}`}>{item.message}</p>
                         </div>
                         <div className="flex items-center gap-1 opacity-20">
                           <Clock className="w-2 h-2" />
