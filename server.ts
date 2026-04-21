@@ -85,6 +85,14 @@ async function startServer() {
       return res.status(400).json({ error: 'Missing host or status' });
     }
 
+    const venezuelaTime = new Date().toLocaleString('es-VE', { 
+      timeZone: 'America/Caracas',
+      hour12: true,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+
     const logEntry: MikrotikStatus = {
       host: host as string,
       status: (status as string).toLowerCase() as 'up' | 'down',
@@ -103,7 +111,7 @@ async function startServer() {
       `<b>Host:</b> ${logEntry.host}\n` +
       `<b>Status:</b> ${logEntry.status.toUpperCase()}\n` +
       `<b>Message:</b> ${logEntry.message}\n` +
-      `<b>Time:</b> ${new Date().toLocaleString()}`;
+      `<b>Time (VE):</b> ${venezuelaTime}`;
 
     await sendTelegramNotification(telegramMessage);
 
@@ -134,6 +142,14 @@ async function startServer() {
     const status = query.status;
     
     if (host && status) {
+       const venezuelaTime = new Date().toLocaleString('es-VE', { 
+         timeZone: 'America/Caracas',
+         hour12: true,
+         hour: '2-digit',
+         minute: '2-digit',
+         second: '2-digit'
+       });
+
        const logEntry: MikrotikStatus = {
          host: host as string,
          status: (status as string).toLowerCase() as 'up' | 'down',
@@ -148,7 +164,7 @@ async function startServer() {
        const telegramMessage = `${emoji} <b>MikroWatch Alert (Typo Fix)</b>\n\n` +
          `<b>Host:</b> ${logEntry.host}\n` +
          `<b>Status:</b> ${logEntry.status.toUpperCase()}\n` +
-         `<b>Time:</b> ${new Date().toLocaleString()}`;
+         `<b>Time (VE):</b> ${venezuelaTime}`;
 
        await sendTelegramNotification(telegramMessage);
        broadcastStatus();

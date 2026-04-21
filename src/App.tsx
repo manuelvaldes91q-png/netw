@@ -30,6 +30,16 @@ export default function App() {
   const antennaNodes = data.current.filter(n => !n.host.toUpperCase().includes('WAN'));
   const otherNodes = data.current.filter(n => !wanNodes.includes(n) && !antennaNodes.includes(n));
 
+  const formatVE = (dateStr?: string) => {
+    return new Date(dateStr || new Date()).toLocaleTimeString('es-VE', {
+      timeZone: 'America/Caracas',
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  };
+
   useEffect(() => {
     let eventSource: EventSource | null = null;
     const connect = () => {
@@ -39,9 +49,9 @@ export default function App() {
         setConnectionStatus('online');
         setTerminalOutput(prev => [
           ...prev, 
-          '>> EVENT_STREAM_CONNECTED: Synchronous monitoring active.',
-          `>> LOCAL_ENDPOINT: ${window.location.hostname}`,
-          '>> STATUS: SYNCHRONIZED - Monitoring system ready.'
+          `[${formatVE()}] >> EVENT_STREAM_CONNECTED`,
+          `[${formatVE()}] >> LOCAL_ENDPOINT: ${window.location.hostname}`,
+          `[${formatVE()}] >> STATUS: SYNCHRONIZED`
         ]);
       };
       eventSource.onmessage = (event) => {
@@ -51,7 +61,7 @@ export default function App() {
           if (result.logs.length > 0) {
             const lastLog = result.logs[0];
             setTerminalOutput(prev => {
-              const logMsg = `>> ALERT: ${lastLog.host} is ${lastLog.status.toUpperCase()} - ${lastLog.message}`;
+              const logMsg = `[${formatVE(lastLog.timestamp)}] >> ALERT: ${lastLog.host} is ${lastLog.status.toUpperCase()} - ${lastLog.message}`;
               // Avoid duplicate logs if possible
               if (prev[prev.length - 1] === logMsg) return prev;
               return [...prev, logMsg];
@@ -185,9 +195,15 @@ export default function App() {
                         {item.status.toUpperCase()}
                       </span>
                     </div>
-                    <p className={`text-[10px] sm:text-xs font-bold truncate ${item.status === 'up' ? 'text-white/60' : 'text-red-400'}`}>
-                      {item.message}
-                    </p>
+                    <div className="flex justify-between items-end mt-2 sm:mt-3">
+                      <p className={`text-[10px] sm:text-xs font-bold truncate ${item.status === 'up' ? 'text-white/60' : 'text-red-400'}`}>
+                        {item.message}
+                      </p>
+                      <div className="flex items-center gap-1.5 opacity-20 ml-2">
+                        <Clock className="w-2.5 h-2.5" />
+                        <span className="text-[9px] font-mono whitespace-nowrap">{formatVE(item.timestamp)}</span>
+                      </div>
+                    </div>
                   </motion.div>
                 ))}
               </div>
@@ -238,7 +254,7 @@ export default function App() {
                         </div>
                         <div className="flex items-center gap-1 opacity-20">
                           <Clock className="w-2 h-2" />
-                          <span className="text-[7px] font-mono">{new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="text-[7px] font-mono">{formatVE(item.timestamp)}</span>
                         </div>
                       </div>
                     </motion.div>
