@@ -119,16 +119,33 @@ export default function App() {
     setCommand('');
   };
 
+  const mikrotikSystem = data.current.find(n => n.host === 'MIKROTIK_SYSTEM');
+
   return (
     <div className="h-screen w-screen bg-terminal-bg text-terminal-text font-mono flex flex-col relative overflow-hidden text-[13px] sm:text-sm">
       {/* Decorative Scanlines */}
       <div className="absolute inset-0 terminal-scanlines z-50 pointer-events-none opacity-10" />
          {/* TOP NAV / SYSTEM BAR */}
       <header className="border-b border-terminal-text/20 p-2 sm:p-4 flex flex-col sm:flex-row justify-between items-center z-10 bg-black/60 backdrop-blur-md gap-2 sm:gap-3">
-        <div className="flex items-center justify-between w-full sm:w-auto">
-          <div className="flex items-center gap-2">
-            <Terminal className="w-4 h-4 sm:w-5 sm:h-5 text-neon-green terminal-glow" />
-            <h1 className="text-xs sm:text-lg font-bold tracking-widest uppercase terminal-glow text-neon-green">MikroWatch</h1>
+        <div className="flex items-center justify-between w-full sm:w-auto overflow-hidden">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-4 h-4 sm:w-5 sm:h-5 text-neon-green terminal-glow" />
+              <h1 className="text-xs sm:text-lg font-bold tracking-widest uppercase terminal-glow text-neon-green shrink-0">MikroWatch</h1>
+            </div>
+            
+            {/* HEARTBEAT INDICATOR */}
+            <div className={`hidden xs:flex items-center gap-2 border-l border-white/10 pl-4 transition-all duration-500 ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'opacity-100' : 'opacity-40'}`}>
+               <Activity className={`w-3 h-3 ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'text-red-500 animate-pulse' : 'text-neon-green animate-pulse'}`} />
+               <div className="flex flex-col">
+                  <span className={`text-[7px] font-black tracking-tighter ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'text-red-500' : 'text-neon-green'}`}>
+                    SYSTEM_PULSE: {mikrotikSystem?.status.toUpperCase() || 'WAITING'}
+                  </span>
+                  {mikrotikSystem && (
+                    <span className="text-[6px] opacity-60">LAST: {formatVE(mikrotikSystem.timestamp)}</span>
+                  )}
+               </div>
+            </div>
           </div>
           <div className="flex sm:hidden items-center gap-3 text-[8px] uppercase font-bold">
             <span className={connectionStatus === 'online' ? 'text-neon-green' : 'text-neon-amber'}>{connectionStatus}</span>

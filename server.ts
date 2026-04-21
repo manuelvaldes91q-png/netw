@@ -20,6 +20,8 @@ interface MikrotikStatus {
 let currentStatuses: Record<string, MikrotikStatus> = {};
 let logs: MikrotikStatus[] = [];
 let clients: any[] = [];
+let lastHeartbeat: string | null = null;
+let heartbeatTimeout: NodeJS.Timeout | null = null;
 
 function broadcastStatus() {
   const data = JSON.stringify({
@@ -32,6 +34,48 @@ function broadcastStatus() {
   
   clients.forEach(client => client.res.write(`data: ${data}\n\n`));
 }
+
+// Watchdog to detect if Mikrotik stops sending data
+const startHeartbeatWatchdog = () => {
+  if (heartbeatTimeout) clearInterval(heartbeatTimeout);
+  
+  heartbeatTimeout = setInterval(async () => {
+    if (!lastHeartbeat) return;
+
+    const lastSeen = new Date(lastHeartbeat).getTime();
+    const now = new Date().getTime();
+    const diffMinutes = (now - lastSeen) / (1000 * 60);
+
+    // If more than 3 minutes without heartbeat, notify
+    if (diffMinutes >= 3) {
+      const venezuelaTime = new Date().toLocaleString('es-VE', { 
+        timeZone: 'America/Caracas',
+        hour12: true,
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+
+      console.log(`[WATCHDOG] Mikrotik Heartbeat Lost. Last seen: ${venezuelaTime}`);
+      
+      const telegramMessage = `⚠️ <b>CRITICAL ALERT: MIKROTIK OFFLINE</b>\n\n` +
+        `<b>Issue:</b> Heartbeat Lost (No communication)\n` +
+        `<b>Last Pulse:</b> ${venezuelaTime}\n\n` +
+        `<i>El sistema no ha recibido comunicación del Mikrotik en más de 3 minutos. Es posible que el equipo esté apagado o sin internet.</i>`;
+      
+      await sendTelegramNotification(telegramMessage);
+      
+      // Update UI state
+      currentStatuses['MIKROTIK_SYSTEM'] = {
+        host: 'MIKROTIK_SYSTEM',
+        status: 'down',
+        message: 'CONNECTION_LOST: Heartbeat timeout',
+        timestamp: new Date().toISOString()
+      };
+      
+      broadcastStatus();
+      lastHeartbeat = null; // Prevent alert spam
+    }
+  }, 60000); 
+};
 
 async function sendTelegramNotification(message: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -68,6 +112,7 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+  startHeartbeatWatchdog();
 
   // Logger for ALL Mikrotik API attempts (to catch typos)
   app.use('/api/mikrotik', (req, res, next) => {
@@ -84,6 +129,8 @@ async function startServer() {
       console.warn('!! Rejected Webhook: Missing host or status query parameters.');
       return res.status(400).json({ error: 'Missing host or status' });
     }
+
+    lastHeartbeat = new Date().toISOString();
 
     const venezuelaTime = new Date().toLocaleString('es-VE', { 
       timeZone: 'America/Caracas',
@@ -142,6 +189,7 @@ async function startServer() {
     const status = query.status;
     
     if (host && status) {
+       lastHeartbeat = new Date().toISOString();
        const venezuelaTime = new Date().toLocaleString('es-VE', { 
          timeZone: 'America/Caracas',
          hour12: true,
@@ -171,6 +219,24 @@ async function startServer() {
        return res.json({ success: true, warning: 'Please add ? before host= in your Mikrotik URL' });
     }
     res.status(400).send('Malformed typo-fix attempt. Use: /api/mikrotik/webhook?host=NAME&status=down');
+  });
+
+  // Heartbeat endpoint for Mikrotik Scheduler
+  app.get('/api/mikrotik/heartbeat', (req, res) => {
+    const { host } = req.query;
+    lastHeartbeat = new Date().toISOString();
+    
+    const hostName = (host as string) || 'MIKROTIK_SYSTEM';
+    
+    currentStatuses[hostName] = {
+      host: hostName,
+      status: 'up',
+      message: 'System alive (Heartbeat OK)',
+      timestamp: lastHeartbeat
+    };
+
+    broadcastStatus();
+    res.json({ status: 'ok', serverTime: lastHeartbeat });
   });
 
   // SSE endpoint for real-time updates
