@@ -113,33 +113,48 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  // Handle common typo: /api/mikrotik/webhookhost=... instead of /api/mikrotik/webhook?host=...
+  // Handle common typo: /api/mikrotik/webhookhost=... or /api/mikrotik/webhookhost=NAME&status=down
   app.get('/api/mikrotik/webhookhost=:data', async (req, res) => {
     console.log('!! Caught "Missing Question Mark" Typo in Mikrotik request.');
     const data = req.params.data;
     const parts = data.split('&');
     const query: any = {};
-    parts.forEach(p => {
+    
+    parts.forEach((p, index) => {
        const [k, v] = p.split('=');
-       query[k] = v;
+       if (v !== undefined) {
+         query[k] = v;
+       } else if (index === 0) {
+         // Assume the first val without = is the host
+         query['host'] = k;
+       }
     });
     
-    // Redirect or manually call logic
-    const { host, status } = query;
+    const host = query.host;
+    const status = query.status;
+    
     if (host && status) {
-       // Logic to trigger broadcast and log
        const logEntry: MikrotikStatus = {
          host: host as string,
          status: (status as string).toLowerCase() as 'up' | 'down',
-         message: `Recuperado de error DNS/Typo`,
+         message: `Recuperado (Typo Fixed)`,
          timestamp: new Date().toISOString(),
        };
        currentStatuses[logEntry.host] = logEntry;
        logs.unshift(logEntry);
+       if (logs.length > 100) logs.pop();
+       
+       const emoji = logEntry.status === 'up' ? '✅' : '❌';
+       const telegramMessage = `${emoji} <b>MikroWatch Alert (Typo Fix)</b>\n\n` +
+         `<b>Host:</b> ${logEntry.host}\n` +
+         `<b>Status:</b> ${logEntry.status.toUpperCase()}\n` +
+         `<b>Time:</b> ${new Date().toLocaleString()}`;
+
+       await sendTelegramNotification(telegramMessage);
        broadcastStatus();
-       return res.json({ success: true, warning: 'Please add ? to your URL' });
+       return res.json({ success: true, warning: 'Please add ? before host= in your Mikrotik URL' });
     }
-    res.status(400).send('Malformed typo-fix attempt');
+    res.status(400).send('Malformed typo-fix attempt. Use: /api/mikrotik/webhook?host=NAME&status=down');
   });
 
   // SSE endpoint for real-time updates

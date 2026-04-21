@@ -205,37 +205,41 @@ export default function App() {
             {/* BOTTOM SPLIT: ANTENNAS & CONFIG */}
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-black/20">
               {/* ANTENNA MONITORING */}
-              <section className="flex-1 flex flex-col p-4 sm:p-6 overflow-y-auto border-r border-white/5 scrollbar-thin">
-                <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6 opacity-50">
-                  <Wifi className="w-4 h-4 sm:w-5 sm:h-5 text-neon-blue" />
-                  <span className="text-[11px] sm:text-[14px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] text-neon-blue">Antenna_NOC</span>
+              <section className="flex-1 flex flex-col p-3 sm:p-5 overflow-y-auto border-r border-white/5 scrollbar-thin">
+                <div className="flex items-center justify-between mb-4 sm:mb-5 opacity-50 px-1">
+                  <div className="flex items-center gap-2">
+                    <Wifi className="w-4 h-4 text-neon-blue" />
+                    <span className="text-[10px] sm:text-[13px] font-black uppercase tracking-[0.2em] text-neon-blue">Antenna_NOC_Grid</span>
+                  </div>
+                  <span className="text-[8px] font-mono">{antennaNodes.length}_TOTAL</span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3">
                   {antennaNodes.map((item) => (
                     <motion.div
                       key={item.host}
                       layout
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-4 sm:p-5 border border-white/10 bg-black/40 relative overflow-hidden rounded-sm"
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="p-3 border border-white/10 bg-black/40 relative overflow-hidden rounded-sm group hover:border-neon-blue/40 transition-all"
                     >
                       <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.status === 'up' ? 'bg-neon-blue shadow-[0_0_10px_rgba(0,163,255,0.4)]' : 'bg-red-500 animate-pulse'}`} />
-                      <div className="flex justify-between items-center mb-2 sm:mb-3">
-                        <span className="text-xs sm:text-sm font-black text-white/90">{item.host}</span>
-                        <Activity className={`w-3 h-3 sm:w-4 sm:h-4 ${item.status === 'up' ? 'text-neon-blue' : 'text-red-500'} opacity-30`} />
+                      <div className="flex justify-between items-start mb-1.5">
+                         <span className="text-[10px] sm:text-xs font-black text-white/90 truncate pr-1" title={item.host}>{item.host}</span>
+                         <span className={`text-[7px] sm:text-[8px] font-black px-1 rounded ${
+                           item.status === 'up' ? 'text-neon-blue' : 'text-red-500 animate-pulse'
+                         }`}>
+                           {item.status.toUpperCase()}
+                         </span>
                       </div>
                       <div className="flex justify-between items-end">
-                        <div className="space-y-1">
-                          <p className={`text-[10px] sm:text-xs font-bold ${item.status === 'up' ? 'text-white/60' : 'text-red-400'}`}>{item.message}</p>
-                          <div className="flex items-center gap-1.5 opacity-20">
-                            <Clock className="w-2.5 h-2.5" />
-                            <span className="text-[8px] font-mono">{new Date(item.timestamp).toLocaleTimeString()}</span>
-                          </div>
+                        <div className="space-y-0.5 max-w-[70%]">
+                          <p className={`text-[8px] sm:text-[10px] font-bold truncate ${item.status === 'up' ? 'text-white/40' : 'text-red-400'}`}>{item.message}</p>
                         </div>
-                        <span className={`text-[9px] font-bold ${item.status === 'up' ? 'text-neon-blue' : 'text-red-500'}`}>
-                          {item.status.toUpperCase()}
-                        </span>
+                        <div className="flex items-center gap-1 opacity-20">
+                          <Clock className="w-2 h-2" />
+                          <span className="text-[7px] font-mono">{new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
                       </div>
                     </motion.div>
                   ))}
