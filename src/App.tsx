@@ -139,13 +139,13 @@ export default function App() {
             
             {/* HEARTBEAT INDICATOR */}
             <div className={`flex items-center gap-2 border-l border-white/10 pl-3 sm:pl-4 transition-all duration-500 ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'opacity-100' : 'opacity-40'}`}>
-               <Activity className={`w-3 h-3 sm:w-4 sm:h-4 ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'text-red-500 animate-pulse' : 'text-neon-green animate-pulse'}`} />
+               <Activity className={`w-5 h-5 sm:w-6 sm:h-6 ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'text-red-500 animate-pulse' : 'text-neon-green animate-pulse'}`} />
                <div className="flex flex-col">
-                  <span className={`text-[6px] sm:text-[8px] font-black tracking-tighter leading-none ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'text-red-500' : 'text-neon-green'}`}>
+                  <span className={`text-[9px] sm:text-[11px] font-black tracking-tighter leading-none ${!mikrotikSystem || mikrotikSystem.status === 'down' ? 'text-red-500' : 'text-neon-green'}`}>
                     SYSTEM_PULSE: {mikrotikSystem?.status.toUpperCase() || 'WAITING'}
                   </span>
                   {mikrotikSystem && (
-                    <span className="text-[5px] sm:text-[7px] opacity-60 leading-none mt-0.5">LAST: {formatVE(mikrotikSystem.timestamp)}</span>
+                    <span className="text-[7px] sm:text-[9px] opacity-60 leading-none mt-1">LAST: {formatVE(mikrotikSystem.timestamp)}</span>
                   )}
                </div>
             </div>
@@ -251,9 +251,9 @@ export default function App() {
                         </div>
 
                         <div className="flex justify-between items-center mt-1">
-                           <div className="flex items-center gap-1.5 opacity-30">
-                             <Clock className="w-3 h-3" />
-                             <span className="text-[9px] font-mono">{formatVE(item.timestamp)}</span>
+                           <div className="flex items-center gap-1.5 opacity-40">
+                             <Clock className="w-4 h-4 text-neon-green" />
+                             <span className="text-[11px] sm:text-xs font-mono font-bold">{formatVE(item.timestamp)}</span>
                            </div>
                            <span className={`text-[9px] font-black px-3 py-1 rounded border tracking-widest ${
                              item.status === 'up' ? 'bg-neon-green/10 text-neon-green border-neon-green/30' : 'bg-red-500/10 text-red-500 border-red-500/30 animate-pulse'
@@ -314,9 +314,9 @@ export default function App() {
                            <p className={`text-[8px] sm:text-[9px] font-black truncate opacity-40 ${item.status === 'down' && 'text-red-400 opacity-60'}`}>
                              {item.message.replace(`Host ${item.host} is `, '')}
                            </p>
-                           <div className="flex items-center gap-1 opacity-20 group-hover:opacity-60 transition-opacity">
-                             <Clock className="w-2 h-2" />
-                             <span className="text-[7px] font-mono">{formatVE(item.timestamp)}</span>
+                           <div className="flex items-center gap-1.5 opacity-40 group-hover:opacity-60 transition-opacity">
+                             <Clock className="w-3 h-3 text-neon-blue" />
+                             <span className="text-[10px] font-mono font-bold text-white/60">{formatVE(item.timestamp)}</span>
                            </div>
                          </div>
                          {item.uptime !== undefined && (
