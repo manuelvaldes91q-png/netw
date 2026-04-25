@@ -13,18 +13,50 @@ interface MikrotikStatus {
 interface MonitorData {
   current: MikrotikStatus[];
   logs: MikrotikStatus[];
-  config?: {
+  config: {
     telegramConfigured: boolean;
+    telegramChatIds: string;
   };
 }
 
 export default function App() {
-  const [data, setData] = useState<MonitorData>({ current: [], logs: [], config: { telegramConfigured: false } });
+  const [data, setData] = useState<MonitorData>({ 
+    current: [], 
+    logs: [], 
+    config: { telegramConfigured: false, telegramChatIds: '' } 
+  });
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'online' | 'offline'>('connecting');
   const [command, setCommand] = useState('');
   const [terminalOutput, setTerminalOutput] = useState<string[]>(['MikroWatch OS v2.0.5 NOC Initialized...', 'System: PASS', 'Network: SECURE', 'Waiting for Mikrotik broadcast...']);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'logs'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'logs' | 'settings'>('dashboard');
+  const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
+  const [newChatIds, setNewChatIds] = useState('');
   const outputRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (data.config.telegramChatIds !== undefined) {
+      setNewChatIds(data.config.telegramChatIds);
+    }
+  }, [data.config.telegramChatIds]);
+
+  const handleUpdateConfig = async () => {
+    setIsUpdatingConfig(true);
+    try {
+      const response = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramChatIds: newChatIds })
+      });
+      if (response.ok) {
+        alert('Configuración guardada correctamente.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error al guardar configuración.');
+    } finally {
+      setIsUpdatingConfig(false);
+    }
+  };
 
   // Categorize nodes
   const wanNodes = data.current.filter(n => n.host.toUpperCase().includes('WAN'));
@@ -168,6 +200,12 @@ export default function App() {
             className={`flex-1 sm:flex-none px-4 sm:px-6 py-1.5 sm:py-2 text-[9px] sm:text-[10px] uppercase font-black tracking-widest transition-all rounded ${activeTab === 'logs' ? 'bg-neon-blue/10 text-neon-blue border border-neon-blue/20' : 'opacity-40'}`}
           >
             Logs
+          </button>
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-1.5 sm:py-2 text-[9px] sm:text-[10px] uppercase font-black tracking-widest transition-all rounded ${activeTab === 'settings' ? 'bg-neon-amber/10 text-neon-amber border border-neon-amber/20' : 'opacity-40'}`}
+          >
+            Settings
           </button>
         </nav>
 
@@ -338,7 +376,7 @@ export default function App() {
               </div>
             </section>
           </div>
-        ) : (
+        ) : activeTab === 'logs' ? (
           /* LOGS VIEW (FULL TERMINAL) */
           <section className="flex-1 flex flex-col bg-black/90 p-4 sm:p-6 relative overflow-hidden">
             <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-2 sm:pb-4">
@@ -372,6 +410,76 @@ export default function App() {
                 className="flex-1 bg-transparent outline-none text-xs sm:text-sm text-neon-blue font-mono"
               />
             </form>
+          </section>
+        ) : (
+          /* SETTINGS VIEW */
+          <section className="flex-1 p-4 sm:p-8 overflow-y-auto bg-black/40">
+            <div className="max-w-2xl mx-auto space-y-8">
+              <div className="flex items-center gap-3 opacity-50 mb-6">
+                <Settings className="w-6 h-6 text-neon-amber" />
+                <span className="text-lg font-black uppercase tracking-[0.3em] text-neon-amber">Configuración del Sistema</span>
+              </div>
+
+              {/* TELEGRAM MANAGEMENT */}
+              <div className="p-6 border border-white/10 bg-white/[0.02] rounded-sm space-y-6 shadow-2xl">
+                 <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                       <div className={`w-3 h-3 rounded-full ${data.config?.telegramConfigured ? 'bg-neon-green shadow-[0_0_10px_rgba(0,255,65,0.5)]' : 'bg-red-500'}`} />
+                       <h3 className="font-black uppercase tracking-widest text-sm">Notificaciones de Telegram</h3>
+                    </div>
+                    {data.config?.telegramConfigured && <Bell className="w-4 h-4 text-neon-green" />}
+                 </div>
+
+                 <div className="space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-black opacity-40 uppercase tracking-widest mb-2">IDs de Mensajería (Chat IDs)</label>
+                      <textarea 
+                        value={newChatIds}
+                        onChange={(e) => setNewChatIds(e.target.value)}
+                        placeholder="Ingresa los IDs separados por comas. Ejemplo: 123456, 789012"
+                        className="w-full bg-black/60 border border-white/10 rounded p-4 font-mono text-xs focus:border-neon-amber/50 focus:outline-none transition-colors min-h-[100px] text-neon-amber"
+                      />
+                      <p className="text-[10px] opacity-30 mt-2 italic">* Puedes agregar múltiples IDs separados por comas para que las alertas lleguen a varias personas.</p>
+                      <p className="text-[10px] opacity-30 mt-1 italic">* En tu VPS, estos se guardan en el archivo monitoring_logs.json automáticamente.</p>
+                    </div>
+
+                    <button 
+                      onClick={handleUpdateConfig}
+                      disabled={isUpdatingConfig}
+                      className="px-8 py-3 bg-neon-amber text-black font-black text-[10px] uppercase tracking-widest rounded-sm hover:opacity-90 disabled:opacity-50 transition-all font-sans"
+                    >
+                      {isUpdatingConfig ? 'Guardando...' : 'Guardar IDs de Telegram'}
+                    </button>
+                 </div>
+              </div>
+
+              {/* MIKROTIK HELP */}
+              <div className="p-6 border border-white/10 bg-white/[0.02] rounded-sm space-y-4 shadow-xl">
+                 <div className="flex items-center gap-3">
+                    <Code className="w-5 h-5 text-neon-blue" />
+                    <h3 className="font-black uppercase tracking-widest text-sm text-neon-blue">MikroTik Webhook Config</h3>
+                 </div>
+                 
+                 <div className="space-y-3">
+                    <p className="text-xs opacity-60">Usa esta URL en tus Netwatch scripts:</p>
+                    <div className="group relative">
+                       <code className="block break-all bg-black/80 font-mono text-[10px] p-4 border border-neon-blue/20 text-neon-blue rounded overflow-hidden select-all">
+                         {`http://${window.location.host}/api/mikrotik/webhook?host=NODO_NOMBRE&status=up`}
+                       </code>
+                    </div>
+                    <div className="p-4 bg-blue-950/20 border border-neon-blue/10 rounded sm space-y-2">
+                       <p className="text-[9px] font-black text-neon-blue uppercase">Instrucciones de Uso:</p>
+                       <ul className="text-[10px] space-y-2 opacity-60 list-disc list-inside">
+                         <li>Accede a MikroTik via Winbox</li>
+                         <li>Ve a <span className="font-bold">Tools {">"} Netwatch</span></li>
+                         <li>Crea un nuevo host para monitorear</li>
+                         <li>En la pestaña <span className="text-neon-green">Up</span>, pega el script fetch con tu URL</li>
+                         <li>En la pestaña <span className="text-red-500">Down</span>, pega la misma URL pero con <span className="font-bold underline">status=down</span></li>
+                       </ul>
+                    </div>
+                 </div>
+              </div>
+            </div>
           </section>
         )}
       </main>

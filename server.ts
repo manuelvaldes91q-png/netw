@@ -21,6 +21,9 @@ interface MikrotikStatus {
 // In-memory store for monitoring state
 let currentStatuses: Record<string, MikrotikStatus> = {};
 let logs: MikrotikStatus[] = [];
+let config = {
+  telegramChatIds: process.env.TELEGRAM_CHAT_ID || ''
+};
 
 // Initialize state from file if exists
 try {
@@ -28,7 +31,10 @@ try {
     const data = JSON.parse(fs.readFileSync(LOGS_FILE, 'utf8'));
     currentStatuses = data.currentStatuses || {};
     logs = data.logs || [];
-    console.log(`[PERSISTENCE] Loaded ${logs.length} logs from disk.`);
+    if (data.config) {
+      config = { ...config, ...data.config };
+    }
+    console.log(`[PERSISTENCE] Loaded ${logs.length} logs and config from disk.`);
   }
 } catch (err) {
   console.error('[PERSISTENCE] Error loading logs:', err);
@@ -46,7 +52,7 @@ function persistState() {
 
     logs = logs.filter(log => new Date(log.timestamp) > fifteenDaysAgo);
 
-    const data = JSON.stringify({ currentStatuses, logs }, null, 2);
+    const data = JSON.stringify({ currentStatuses, logs, config }, null, 2);
     fs.writeFileSync(LOGS_FILE, data);
   } catch (err) {
     console.error('[PERSISTENCE] Error saving logs:', err);
@@ -105,7 +111,8 @@ function broadcastStatus() {
     current: currentWithUptime,
     logs: logs.slice(0, 50),
     config: {
-      telegramConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
+      telegramChatIds: config.telegramChatIds,
+      telegramConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && (config.telegramChatIds || process.env.TELEGRAM_CHAT_ID)),
     }
   });
   
@@ -156,31 +163,38 @@ const startHeartbeatWatchdog = () => {
 
 async function sendTelegramNotification(message: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
+  const chatIdEnv = config.telegramChatIds || process.env.TELEGRAM_CHAT_ID;
 
-  if (!token || !chatId) {
+  if (!token || !chatIdEnv) {
     console.warn('Telegram token or chat ID not configured.');
     return;
   }
 
-  try {
-    const url = `https://api.telegram.org/bot${token}/sendMessage`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: message,
-        parse_mode: 'HTML',
-      }),
-    });
+  // Support multiple chat IDs separated by commas or spaces
+  const chatIds = chatIdEnv.split(/[,\s]+/).filter(id => id.trim().length > 0);
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Telegram API error:', errorData);
+  for (const chatId of chatIds) {
+    try {
+      const url = `https://api.telegram.org/bot${token}/sendMessage`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId.trim(),
+          text: message,
+          parse_mode: 'HTML',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error(`Telegram API error for chat ID ${chatId}:`, errorData);
+      } else {
+        console.log(`[TELEGRAM] Notification sent to ${chatId}`);
+      }
+    } catch (error) {
+      console.error(`Failed to send Telegram notification to ${chatId}:`, error);
     }
-  } catch (error) {
-    console.error('Failed to send Telegram notification:', error);
   }
 }
 
@@ -368,6 +382,19 @@ async function startServer() {
     });
   });
 
+  // API to update config
+  app.post('/api/config', express.json(), (req, res) => {
+    const { telegramChatIds } = req.body;
+    if (typeof telegramChatIds === 'string') {
+      config.telegramChatIds = telegramChatIds;
+      persistState();
+      broadcastStatus();
+      res.json({ status: 'ok', config });
+    } else {
+      res.status(400).json({ error: 'Invalid config' });
+    }
+  });
+
   // API to get current status and logs for the frontend (fallback)
   app.get('/api/status', (req, res) => {
     const currentWithUptime = Object.values(currentStatuses).map(n => ({
@@ -379,7 +406,8 @@ async function startServer() {
       current: currentWithUptime,
       logs: logs.slice(0, 50),
       config: {
-        telegramConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
+        telegramChatIds: config.telegramChatIds,
+        telegramConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && (config.telegramChatIds || process.env.TELEGRAM_CHAT_ID)),
       }
     });
   });
