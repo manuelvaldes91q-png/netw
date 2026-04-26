@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 interface MikrotikStatus {
   host: string;
+  ip?: string;
   status: 'up' | 'down';
   message: string;
   timestamp: string;
@@ -27,7 +28,7 @@ export default function App() {
   });
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'online' | 'offline'>('connecting');
   const [command, setCommand] = useState('');
-  const [terminalOutput, setTerminalOutput] = useState<string[]>(['MikroWatch OS v2.0.5 NOC Initialized...', 'System: PASS', 'Network: SECURE', 'Waiting for Mikrotik broadcast...']);
+  const [terminalOutput, setTerminalOutput] = useState<string[]>(['MikroWatch OS v2.0.5 NOC Inicializado...', 'Sistema: PASS', 'Red: SEGURA', 'Esperando broadcast del MikroTik...']);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'logs' | 'settings'>('dashboard');
   const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
   const [newChatIds, setNewChatIds] = useState('');
@@ -66,9 +67,12 @@ export default function App() {
   );
 
   const formatVE = (dateStr?: string) => {
-    return new Date(dateStr || new Date()).toLocaleTimeString('es-VE', {
+    return new Date(dateStr || new Date()).toLocaleString('es-VE', {
       timeZone: 'America/Caracas',
       hour12: false,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
@@ -84,9 +88,9 @@ export default function App() {
         setConnectionStatus('online');
         setTerminalOutput(prev => [
           ...prev, 
-          `[${formatVE()}] >> EVENT_STREAM_CONNECTED`,
-          `[${formatVE()}] >> LOCAL_ENDPOINT: ${window.location.hostname}`,
-          `[${formatVE()}] >> STATUS: SYNCHRONIZED`
+          `[${formatVE()}] >> FLUJO_EVENTOS_CONECTADO`,
+          `[${formatVE()}] >> ENDPOINT_LOCAL: ${window.location.hostname}`,
+          `[${formatVE()}] >> ESTADO: SINCRONIZADO`
         ]);
       };
       eventSource.onmessage = (event) => {
@@ -96,7 +100,7 @@ export default function App() {
           if (result.logs.length > 0) {
             const lastLog = result.logs[0];
             setTerminalOutput(prev => {
-              const logMsg = `[${formatVE(lastLog.timestamp)}] >> ALERT: ${lastLog.host} is ${lastLog.status.toUpperCase()} - ${lastLog.message}`;
+              const logMsg = `[${formatVE(lastLog.timestamp)}] >> ALERTA: ${lastLog.host} está ${lastLog.status === 'up' ? 'EN LÍNEA' : 'FUERA DE LÍNEA'} - ${lastLog.message}`;
               // Avoid duplicate logs if possible
               if (prev[prev.length - 1] === logMsg) return prev;
               return [...prev, logMsg];
@@ -108,7 +112,7 @@ export default function App() {
       };
       eventSource.onerror = () => {
         setConnectionStatus('offline');
-        setTerminalOutput(prev => [...prev, '!! CONNECTION_LOST: Attempting reconnection...']);
+        setTerminalOutput(prev => [...prev, '!! CONEXIÓN_PERDIDA: Intentando reconexión...']);
         eventSource?.close();
         setTimeout(connect, 3000);
       };
@@ -131,23 +135,23 @@ export default function App() {
     let response = `Unknown command: ${cmd}. Type 'help' for available commands.`;
 
     if (cmd === 'help') {
-      response = 'Available commands: status, troubleshoot, check-url, config, clear, help, about, tabs';
+      response = 'Comandos disponibles: status, troubleshoot, check-url, config, clear, help, about, tabs';
     } else if (cmd === 'status') {
-      response = `ONLINE_HOSTS: ${data.current.filter(h => h.status === 'up').length}, OFFLINE: ${data.current.filter(h => h.status === 'down').length}`;
+      response = `HOSTS_ACTIVOS: ${data.current.filter(h => h.status === 'up').length}, INACTIVOS: ${data.current.filter(h => h.status === 'down').length}`;
     } else if (cmd === 'check-url') {
-      response = `YOUR_WEBHOOK_URL: ${window.location.origin}/api/mikrotik/webhook`;
+      response = `TU_URL_WEBHOOK: ${window.location.origin}/api/mikrotik/webhook`;
     } else if (cmd === 'troubleshoot') {
-      response = '1. ERROR 302 FOUND: El link de "ais-dev" está protegido por login de Google. El Mikrotik no puede entrar. SOLUCIÓN: Instala en tu VPS o despliega como Pública. 2. URL FORMAT: Debe tener "?" después de "webhook". 3. SSL: Usa check-certificate=no.';
+      response = '1. ERROR 302 FOUND: El link de "ais-dev" está protegido. SOLUCIÓN: Despliega como Pública. 2. FORMATO URL: Debe tener "?" después de "webhook". 3. SSL: Usa check-certificate=no.';
     } else if (cmd === 'config') {
-      response = `TELEGRAM_INTEGRATION: ${data.config?.telegramConfigured ? 'ENABLED' : 'DISABLED'}`;
+      response = `INTEGRACIÓN_TELEGRAM: ${data.config?.telegramConfigured ? 'HABILITADA' : 'DESHABILITADA'}`;
     } else if (cmd === 'clear') {
-      setTerminalOutput(['>> Buffers cleared. Listening...']);
+      setTerminalOutput(['>> Buffers limpiados. Escuchando...']);
       setCommand('');
       return;
     } else if (cmd === 'tabs') {
-      response = 'Switching layouts for mobile. Use internal UI buttons.';
+      response = 'Cambiando layouts. Usa los botones superiores.';
     } else if (cmd === 'about') {
-      response = 'MikroWatch v2.0 - High Performance Monitoring for Mikrotik Systems.';
+      response = 'MikroWatch v2.0 - Monitoreo de Alto Rendimiento para MikroTik.';
     }
 
     setTerminalOutput(prev => [...prev, `> ${cmd}`, response]);
@@ -193,7 +197,7 @@ export default function App() {
             onClick={() => setActiveTab('dashboard')}
             className={`flex-1 sm:flex-none px-4 sm:px-6 py-1.5 sm:py-2 text-[9px] sm:text-[10px] uppercase font-black tracking-widest transition-all rounded ${activeTab === 'dashboard' ? 'bg-neon-green/10 text-neon-green border border-neon-green/20' : 'opacity-40'}`}
           >
-            Dashboard
+            Panel
           </button>
           <button 
             onClick={() => setActiveTab('logs')}
@@ -205,7 +209,7 @@ export default function App() {
             onClick={() => setActiveTab('settings')}
             className={`flex-1 sm:flex-none px-4 sm:px-6 py-1.5 sm:py-2 text-[9px] sm:text-[10px] uppercase font-black tracking-widest transition-all rounded ${activeTab === 'settings' ? 'bg-neon-amber/10 text-neon-amber border border-neon-amber/20' : 'opacity-40'}`}
           >
-            Settings
+            Ajustes
           </button>
         </nav>
 
@@ -230,14 +234,14 @@ export default function App() {
               <div className="flex items-center justify-between mb-3 sm:mb-4 px-1 sm:px-2 opacity-50">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <Shield className="w-4 h-4 text-neon-green" />
-                  <span className="text-[11px] sm:text-[13px] font-black uppercase tracking-[0.2em] sm:tracking-[0.4em] text-neon-green">Backbone_WAN_Core</span>
+                  <span className="text-[11px] sm:text-[13px] font-black uppercase tracking-[0.2em] sm:tracking-[0.4em] text-neon-green">Monitoreo_WAN_Principal</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-mono text-neon-green">{wanNodes.filter(n => n.status === 'up').length} UP</span>
+                    <span className="text-[9px] font-mono text-neon-green">{wanNodes.filter(n => n.status === 'up').length} ACTIVO</span>
                     <span className="text-[9px] font-mono text-white/20">|</span>
                     <span className={`text-[9px] font-mono ${wanNodes.filter(n => n.status === 'down').length > 0 ? 'text-red-500 animate-pulse' : 'text-white/40'}`}>
-                      {wanNodes.filter(n => n.status === 'down').length} DOWN
+                      {wanNodes.filter(n => n.status === 'down').length} CAÍDO
                     </span>
                   </div>
                 </div>
@@ -272,13 +276,13 @@ export default function App() {
                             <div className="flex items-center gap-2 opacity-40">
                               <Info className="w-3 h-3" />
                               <span className="text-[9px] uppercase font-bold tracking-tighter">
-                                {item.host.includes('1') ? '8.8.8.8' : '9.9.9.9'}
+                                {item.ip || (item.host.includes('1') ? '8.8.8.8' : '9.9.9.9')}
                               </span>
                             </div>
                           </div>
                           
                           <div className="flex flex-col items-end gap-1">
-                             <span className="text-[8px] font-black opacity-30 tracking-[0.2em]">AVAILABILITY</span>
+                             <span className="text-[8px] font-black opacity-30 tracking-[0.2em]">DISPONIBILIDAD</span>
                              <span className={`text-xs sm:text-sm font-mono font-black ${
                                (item.uptime || 0) > 99 ? 'text-neon-green' : 
                                (item.uptime || 0) > 95 ? 'text-neon-amber' : 'text-red-500'
@@ -296,7 +300,7 @@ export default function App() {
                            <span className={`text-[9px] font-black px-3 py-1 rounded border tracking-widest ${
                              item.status === 'up' ? 'bg-neon-green/10 text-neon-green border-neon-green/30' : 'bg-red-500/10 text-red-500 border-red-500/30 animate-pulse'
                            }`}>
-                             {item.status.toUpperCase()}
+                             {item.status === 'up' ? 'ACTIVO' : 'CRÍTICO'}
                            </span>
                         </div>
                       </div>
@@ -311,14 +315,14 @@ export default function App() {
               <div className="flex items-center justify-between mb-2 opacity-50 px-1 sm:px-2">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <Wifi className="w-4 h-4 text-neon-blue" />
-                  <span className="text-[11px] sm:text-[13px] font-black uppercase tracking-[0.2em] sm:tracking-[0.4em] text-neon-blue">Antenna_NOC_Grid</span>
+                  <span className="text-[11px] sm:text-[13px] font-black uppercase tracking-[0.2em] sm:tracking-[0.4em] text-neon-blue">Red_de_Antenas_NOC</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-mono text-neon-blue">{antennaNodes.length} NODES</span>
+                  <span className="text-[9px] font-mono text-neon-blue">{antennaNodes.length} NODOS</span>
                   {antennaNodes.filter(n => n.status === 'down').length > 0 && (
                     <>
                       <span className="text-[9px] font-mono text-white/20">|</span>
-                      <span className="text-[9px] font-mono text-red-500 animate-pulse">{antennaNodes.filter(n => n.status === 'down').length} CRITICAL</span>
+                      <span className="text-[9px] font-mono text-red-500 animate-pulse">{antennaNodes.filter(n => n.status === 'down').length} CRÍTICO</span>
                    </>
                   )}
                 </div>
@@ -339,11 +343,14 @@ export default function App() {
                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.status === 'up' ? 'bg-neon-blue/40' : 'bg-red-500 animate-pulse'}`} />
                        
                        <div className="flex justify-between items-start mb-2">
-                         <span className={`text-[10px] sm:text-xs font-black truncate pr-1 ${item.status === 'up' ? 'text-white/80' : 'text-red-400'}`} title={item.host}>{item.host}</span>
+                         <div className="flex flex-col">
+                           <span className={`text-[10px] sm:text-xs font-black truncate pr-1 ${item.status === 'up' ? 'text-white/80' : 'text-red-400'}`} title={item.host}>{item.host}</span>
+                           {item.ip && <span className="text-[8px] opacity-40 font-mono tracking-tighter">{item.ip}</span>}
+                         </div>
                          <span className={`text-[7px] sm:text-[8px] font-black px-1.5 rounded ${
                            item.status === 'up' ? 'text-neon-blue/80' : 'text-white bg-red-600 animate-pulse'
                          }`}>
-                           {item.status.toUpperCase()}
+                           {item.status === 'up' ? 'ACTIVO' : 'ERROR'}
                          </span>
                        </div>
 

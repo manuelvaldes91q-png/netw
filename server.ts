@@ -13,6 +13,7 @@ const LOGS_FILE = path.join(process.cwd(), 'monitoring_logs.json');
 
 interface MikrotikStatus {
   host: string;
+  ip?: string;
   status: 'up' | 'down';
   message: string;
   timestamp: string;
@@ -135,15 +136,18 @@ const startHeartbeatWatchdog = () => {
       const venezuelaTime = new Date().toLocaleString('es-VE', { 
         timeZone: 'America/Caracas',
         hour12: true,
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
         hour: '2-digit', minute: '2-digit', second: '2-digit'
       });
 
       console.log(`[WATCHDOG] Mikrotik Heartbeat Lost. Last seen: ${venezuelaTime}`);
       
-      const telegramMessage = `⚠️ <b>CRITICAL ALERT: MIKROTIK OFFLINE</b>\n\n` +
-        `<b>Issue:</b> Heartbeat Lost (No communication)\n` +
-        `<b>Last Pulse:</b> ${venezuelaTime}\n\n` +
-        `<i>El sistema no ha recibido comunicación del Mikrotik en más de 3 minutos. Es posible que el equipo esté apagado o sin internet.</i>`;
+      const telegramMessage = `⚠️ <b>ALERTA CRÍTICA: MIKROTIK DESCONECTADO</b>\n\n` +
+        `<b>Problema:</b> Se perdió el latido (Sin comunicación)\n` +
+        `<b>Último Pulso:</b> ${venezuelaTime}\n\n` +
+        `<i>El sistema no ha recibido comunicación del MikroTik en más de 3 minutos. Es posible que el equipo esté apagado o sin internet.</i>`;
       
       await sendTelegramNotification(telegramMessage);
       
@@ -213,8 +217,8 @@ async function startServer() {
 
   // Webhook endpoint for Mikrotik
   app.get('/api/mikrotik/webhook', async (req, res) => {
-    const { host, status, message } = req.query;
-    console.log(`[ Mikrotik Webhook Received ] Host: ${host}, Status: ${status}, Msg: ${message}`);
+    const { host, status, message, ip } = req.query;
+    console.log(`[ Mikrotik Webhook Received ] Host: ${host}, IP: ${ip}, Status: ${status}, Msg: ${message}`);
 
     if (!host || !status) {
       console.warn('!! Rejected Webhook: Missing host or status query parameters.');
@@ -226,6 +230,9 @@ async function startServer() {
     const venezuelaTime = new Date().toLocaleString('es-VE', { 
       timeZone: 'America/Caracas',
       hour12: true,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
@@ -233,8 +240,9 @@ async function startServer() {
 
     const logEntry: MikrotikStatus = {
       host: host as string,
+      ip: ip as string || undefined,
       status: (status as string).toLowerCase() as 'up' | 'down',
-      message: (message as string) || `Host ${host} is ${status}`,
+      message: (message as string) || `Host ${host} ${ip ? `(${ip}) ` : ''}está ${status === 'up' ? 'en línea' : 'fuera de línea'}`,
       timestamp: new Date().toISOString(),
     };
 
@@ -246,11 +254,13 @@ async function startServer() {
 
     // Notify via Telegram
     const emoji = logEntry.status === 'up' ? '✅' : '❌';
-    const telegramMessage = `${emoji} <b>MikroWatch Alert</b>\n\n` +
+    const statusText = logEntry.status === 'up' ? 'EN LÍNEA' : 'FUERA DE LÍNEA';
+    const telegramMessage = `${emoji} <b>Alerta MikroWatch</b>\n\n` +
       `<b>Host:</b> ${logEntry.host}\n` +
-      `<b>Status:</b> ${logEntry.status.toUpperCase()}\n` +
-      `<b>Message:</b> ${logEntry.message}\n` +
-      `<b>Time (VE):</b> ${venezuelaTime}`;
+      (logEntry.ip ? `<b>IP:</b> ${logEntry.ip}\n` : '') +
+      `<b>Estado:</b> ${statusText}\n` +
+      `<b>Mensaje:</b> ${logEntry.message}\n` +
+      `<b>Fecha (VE):</b> ${venezuelaTime}`;
 
     await sendTelegramNotification(telegramMessage);
 
