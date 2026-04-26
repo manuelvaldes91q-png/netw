@@ -310,7 +310,7 @@ export default function App() {
               </div>
             </section>
 
-            {/* ANTENNA MONITORING: NOC GRID */}
+            {/* ANTENNA MONITORING: FULL WIDTH LIST */}
             <section className="flex-1 p-3 sm:p-6 flex flex-col gap-4 overflow-hidden bg-black/10">
               <div className="flex items-center justify-between mb-2 opacity-50 px-1 sm:px-2">
                 <div className="flex items-center gap-2 sm:gap-3">
@@ -329,54 +329,74 @@ export default function App() {
               </div>
 
               <div className="flex-1 overflow-y-auto scrollbar-thin pr-1 pb-4">
-                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3 sm:gap-4">
+                 <div className="flex flex-col gap-2">
                    {antennaNodes.map((item) => (
                      <motion.div
                        key={item.host}
                        layout
-                       initial={{ opacity: 0, scale: 0.95 }}
-                       animate={{ opacity: 1, scale: 1 }}
-                       className={`p-3 sm:p-4 border relative overflow-hidden rounded-sm group transition-all ${
-                         item.status === 'up' ? 'border-white/5 bg-white/[0.02] hover:border-neon-blue/40' : 'border-red-500/30 bg-red-950/10 shadow-[0_0_20px_rgba(239,68,68,0.1)]'
+                       initial={{ opacity: 0, x: -10 }}
+                       animate={{ opacity: 1, x: 0 }}
+                       className={`flex flex-col md:flex-row md:items-center justify-between p-3 sm:p-4 border relative overflow-hidden rounded-sm group transition-all gap-4 ${
+                         item.status === 'up' ? 'border-white/5 bg-white/[0.02] hover:border-neon-blue/40' : 'border-red-500/30 bg-red-950/20 shadow-[0_0_20px_rgba(239,68,68,0.1)]'
                        }`}
                      >
                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.status === 'up' ? 'bg-neon-blue/40' : 'bg-red-500 animate-pulse'}`} />
                        
-                       <div className="flex justify-between items-start mb-2">
+                       <div className="flex items-start gap-4 min-w-[200px]">
                          <div className="flex flex-col">
-                           <span className={`text-[10px] sm:text-xs font-black truncate pr-1 ${item.status === 'up' ? 'text-white/80' : 'text-red-400'}`} title={item.host}>{item.host}</span>
-                           {item.ip && <span className="text-[8px] opacity-40 font-mono tracking-tighter">{item.ip}</span>}
+                           <span className={`text-[12px] sm:text-sm font-black tracking-tight ${item.status === 'up' ? 'text-white/90' : 'text-red-400'}`}>
+                             {item.host}
+                           </span>
+                           {item.ip && <span className="text-[10px] opacity-40 font-mono tracking-tighter">{item.ip}</span>}
                          </div>
-                         <span className={`text-[7px] sm:text-[8px] font-black px-1.5 rounded ${
-                           item.status === 'up' ? 'text-neon-blue/80' : 'text-white bg-red-600 animate-pulse'
+                       </div>
+
+                       <div className="flex-1 min-w-0">
+                         <p className={`text-[10px] sm:text-xs font-medium leading-relaxed opacity-60 ${item.status === 'up' ? '' : 'text-red-300'}`}>
+                           {item.message}
+                         </p>
+                         <div className="flex items-center gap-2 mt-1 opacity-20 group-hover:opacity-40 transition-opacity">
+                           <Clock className="w-3 h-3 text-neon-blue" />
+                           <span className="text-[9px] font-mono font-bold">{formatVE(item.timestamp)}</span>
+                         </div>
+                       </div>
+
+                       <div className="flex items-center justify-between md:justify-end gap-6 sm:gap-12 border-t border-white/5 pt-3 md:pt-0 md:border-0">
+                         {/* DISPONIBILIDAD */}
+                         <div className="flex flex-col items-start md:items-end gap-1">
+                            <span className="text-[8px] font-black opacity-30 tracking-[0.2em] whitespace-nowrap">DISPONIBILIDAD_15D</span>
+                            <div className="flex items-center gap-3">
+                               <div className="hidden xs:block h-1 w-20 bg-white/5 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full transition-all duration-1000 ${
+                                      (item.uptime || 0) > 99 ? 'bg-neon-blue' : 
+                                      (item.uptime || 0) > 95 ? 'bg-neon-amber' : 'bg-red-500'
+                                    }`} 
+                                    style={{ width: `${item.uptime || 0}%` }} 
+                                  />
+                               </div>
+                               <span className={`text-base font-mono font-black ${
+                                 (item.uptime || 0) > 99 ? 'text-neon-blue' : 
+                                 (item.uptime || 0) > 95 ? 'text-neon-amber' : 'text-red-500'
+                               }`}>
+                                 {item.uptime !== undefined ? `${item.uptime}%` : '---'}
+                               </span>
+                            </div>
+                         </div>
+
+                         <span className={`text-[7px] sm:text-[9px] font-black px-4 py-1.5 rounded border tracking-[0.2em] whitespace-nowrap ${
+                           item.status === 'up' ? 'bg-neon-blue/10 text-neon-blue border-neon-blue/30' : 'bg-red-500/10 text-red-500 border-red-500/30 animate-pulse'
                          }`}>
                            {item.status === 'up' ? 'ACTIVO' : 'ERROR'}
                          </span>
-                       </div>
-
-                       <div className="flex justify-between items-end mt-2">
-                         <div className="flex flex-col gap-0.5">
-                           <p className={`text-[8px] sm:text-[9px] font-black truncate opacity-40 ${item.status === 'down' && 'text-red-400 opacity-60'}`}>
-                             {item.message.replace(`Host ${item.host} is `, '')}
-                           </p>
-                           <div className="flex items-center gap-1.5 opacity-40 group-hover:opacity-60 transition-opacity">
-                             <Clock className="w-3 h-3 text-neon-blue" />
-                             <span className="text-[10px] font-mono font-bold text-white/60">{formatVE(item.timestamp)}</span>
-                           </div>
-                         </div>
-                         {item.uptime !== undefined && (
-                           <span className={`text-[8px] font-mono font-bold ${item.uptime > 99 ? 'text-neon-blue' : 'text-white/40'}`}>
-                             {item.uptime}%
-                           </span>
-                         )}
                        </div>
                      </motion.div>
                    ))}
                    
                    {antennaNodes.length === 0 && (
-                    <div className="col-span-full py-12 flex flex-col items-center justify-center opacity-10">
+                    <div className="py-12 flex flex-col items-center justify-center opacity-10 border border-dashed border-white/10">
                       <Wifi className="w-12 h-12 mb-2" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Awaiting Antenna Metrics</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest">Esperando Métricas de Antenas</span>
                     </div>
                    )}
                  </div>
