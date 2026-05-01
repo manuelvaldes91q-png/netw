@@ -181,7 +181,7 @@ export default function App() {
                     SYSTEM_PULSE: {mikrotikSystem?.status.toUpperCase() || 'WAITING'}
                   </span>
                   {mikrotikSystem && (
-                    <span className="text-[7px] sm:text-[9px] opacity-60 leading-none mt-1">LAST: {formatVE(mikrotikSystem.timestamp)}</span>
+                    <span className="text-[8px] sm:text-[10px] opacity-100 text-white/90 leading-none mt-1">LAST: {formatVE(mikrotikSystem.timestamp)}</span>
                   )}
                </div>
             </div>
@@ -293,7 +293,7 @@ export default function App() {
                         </div>
 
                         <div className="flex justify-between items-center mt-1">
-                           <div className="flex items-center gap-1.5 opacity-40">
+                           <div className="flex items-center gap-1.5 opacity-90">
                              <Clock className="w-4 h-4 text-neon-green" />
                              <span className="text-[11px] sm:text-xs font-mono font-bold">{formatVE(item.timestamp)}</span>
                            </div>
@@ -352,12 +352,12 @@ export default function App() {
                        </div>
 
                        <div className="flex-1 min-w-0">
-                         <p className={`text-[10px] sm:text-xs font-medium leading-relaxed opacity-60 ${item.status === 'up' ? '' : 'text-red-300'}`}>
+                         <p className={`text-[10px] sm:text-xs font-medium leading-relaxed opacity-80 ${item.status === 'up' ? 'text-white/80' : 'text-red-300'}`}>
                            {item.message}
                          </p>
-                         <div className="flex items-center gap-2 mt-1 opacity-20 group-hover:opacity-40 transition-opacity">
-                           <Clock className="w-3 h-3 text-neon-blue" />
-                           <span className="text-[9px] font-mono font-bold">{formatVE(item.timestamp)}</span>
+                         <div className="flex items-center gap-2 mt-1.5 opacity-80">
+                           <Clock className={`w-3.5 h-3.5 ${item.status === 'up' ? 'text-neon-blue' : 'text-red-400'}`} />
+                           <span className={`text-[10px] sm:text-[11px] font-mono font-bold ${item.status === 'up' ? 'text-neon-blue/80' : 'text-red-400/80'}`}>{formatVE(item.timestamp)}</span>
                          </div>
                        </div>
 
