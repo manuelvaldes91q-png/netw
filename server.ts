@@ -4,12 +4,61 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import fs from 'fs';
+import TelegramBot from 'node-telegram-bot-api';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const LOGS_FILE = path.join(process.cwd(), 'monitoring_logs.json');
+
+// Initialize Telegram Bot for receiving commands
+let telegramBot: TelegramBot | null = null;
+if (process.env.TELEGRAM_BOT_TOKEN) {
+  try {
+    telegramBot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
+    console.log('[TELEGRAM] Bot polling started');
+
+    const sendPanel = (chatId: number) => {
+      const summary = getStatusSummary();
+      telegramBot?.sendMessage(chatId, summary, { 
+        parse_mode: 'HTML',
+        reply_markup: {
+          keyboard: [
+            [{ text: '📊 Ver Panel de Estado' }]
+          ],
+          resize_keyboard: true,
+          is_persistent: true
+        }
+      });
+    };
+
+    telegramBot.onText(/\/(panel|status)/, (msg) => {
+      sendPanel(msg.chat.id);
+    });
+
+    telegramBot.onText(/📊 Ver Panel de Estado/, (msg) => {
+      sendPanel(msg.chat.id);
+    });
+
+    telegramBot.onText(/\/(start|help)/, (msg) => {
+      const chatId = msg.chat.id;
+      const helpMsg = `🤖 <b>MikroWatch NOC Bot</b>\n\nPresiona el botón de abajo para ver el estado de la red.`;
+      telegramBot?.sendMessage(chatId, helpMsg, { 
+        parse_mode: 'HTML',
+        reply_markup: {
+          keyboard: [
+            [{ text: '📊 Ver Panel de Estado' }]
+          ],
+          resize_keyboard: true,
+          is_persistent: true
+        }
+      });
+    });
+  } catch (error) {
+    console.warn('[TELEGRAM] Failed to initialize bot polling:', error);
+  }
+}
 
 interface MikrotikStatus {
   host: string;
@@ -182,8 +231,7 @@ const startHeartbeatWatchdog = () => {
       const telegramMessage = `⚠️ <b>ALERTA CRÍTICA: MIKROTIK DESCONECTADO</b>\n\n` +
         `<b>Problema:</b> Se perdió el latido (Sin comunicación)\n` +
         `<b>Último Pulso:</b> ${venezuelaTime}\n\n` +
-        `<i>El sistema no ha recibido comunicación del MikroTik en más de 3 minutos. Es posible que el equipo esté apagado o sin internet.</i>` +
-        getStatusSummary();
+        `<i>El sistema no ha recibido comunicación del MikroTik en más de 3 minutos. Es posible que el equipo esté apagado o sin internet.</i>`;
       
       await sendTelegramNotification(telegramMessage);
       
@@ -288,8 +336,7 @@ async function startServer() {
       (logEntry.ip ? `<b>IP:</b> ${logEntry.ip}\n` : '') +
       `<b>Estado:</b> ${statusText}\n` +
       `<b>Mensaje:</b> ${logEntry.message}\n` +
-      `<b>Fecha (VE):</b> ${venezuelaTime}` +
-      getStatusSummary();
+      `<b>Fecha (VE):</b> ${venezuelaTime}`;
 
     await sendTelegramNotification(telegramMessage);
 
