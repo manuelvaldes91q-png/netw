@@ -120,6 +120,33 @@ function broadcastStatus() {
   clients.forEach(client => client.res.write(`data: ${data}\n\n`));
 }
 
+function getStatusSummary(): string {
+  const allNodes = Object.values(currentStatuses).sort((a, b) => a.host.localeCompare(b.host));
+  const wanNodes = allNodes.filter(n => n.host.toUpperCase().includes('WAN'));
+  const antennaNodes = allNodes.filter(n => 
+    !n.host.toUpperCase().includes('WAN') && 
+    n.host !== 'MIKROTIK_SYSTEM'
+  );
+
+  let summary = `\n\n📊 <b>PANEL DE ESTADO ACTUAL</b>\n`;
+  
+  if (wanNodes.length > 0) {
+    summary += `\n🌐 <b>REDES WAN:</b>\n`;
+    wanNodes.forEach(n => {
+      summary += `${n.status === 'up' ? '✅' : '❌'} ${n.host}\n`;
+    });
+  }
+
+  if (antennaNodes.length > 0) {
+    summary += `\n📡 <b>ANTENAS / NODOS:</b>\n`;
+    antennaNodes.forEach(n => {
+      summary += `${n.status === 'up' ? '✅' : '❌'} ${n.host}\n`;
+    });
+  }
+
+  return summary;
+}
+
 // Watchdog to detect if Mikrotik stops sending data
 const startHeartbeatWatchdog = () => {
   if (heartbeatTimeout) clearInterval(heartbeatTimeout);
@@ -144,20 +171,21 @@ const startHeartbeatWatchdog = () => {
 
       console.log(`[WATCHDOG] Mikrotik Heartbeat Lost. Last seen: ${venezuelaTime}`);
       
-      const telegramMessage = `⚠️ <b>ALERTA CRÍTICA: MIKROTIK DESCONECTADO</b>\n\n` +
-        `<b>Problema:</b> Se perdió el latido (Sin comunicación)\n` +
-        `<b>Último Pulso:</b> ${venezuelaTime}\n\n` +
-        `<i>El sistema no ha recibido comunicación del MikroTik en más de 3 minutos. Es posible que el equipo esté apagado o sin internet.</i>`;
-      
-      await sendTelegramNotification(telegramMessage);
-      
-      // Update UI state
+      // Update UI state first so it reflects in summary
       currentStatuses['MIKROTIK_SYSTEM'] = {
         host: 'MIKROTIK_SYSTEM',
         status: 'down',
         message: 'CONNECTION_LOST: Heartbeat timeout',
         timestamp: new Date().toISOString()
       };
+
+      const telegramMessage = `⚠️ <b>ALERTA CRÍTICA: MIKROTIK DESCONECTADO</b>\n\n` +
+        `<b>Problema:</b> Se perdió el latido (Sin comunicación)\n` +
+        `<b>Último Pulso:</b> ${venezuelaTime}\n\n` +
+        `<i>El sistema no ha recibido comunicación del MikroTik en más de 3 minutos. Es posible que el equipo esté apagado o sin internet.</i>` +
+        getStatusSummary();
+      
+      await sendTelegramNotification(telegramMessage);
       
       broadcastStatus();
       lastHeartbeat = null; // Prevent alert spam
@@ -260,7 +288,8 @@ async function startServer() {
       (logEntry.ip ? `<b>IP:</b> ${logEntry.ip}\n` : '') +
       `<b>Estado:</b> ${statusText}\n` +
       `<b>Mensaje:</b> ${logEntry.message}\n` +
-      `<b>Fecha (VE):</b> ${venezuelaTime}`;
+      `<b>Fecha (VE):</b> ${venezuelaTime}` +
+      getStatusSummary();
 
     await sendTelegramNotification(telegramMessage);
 
