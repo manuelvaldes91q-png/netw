@@ -8,8 +8,6 @@ import TelegramBot from 'node-telegram-bot-api';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const LOGS_FILE = path.join(process.cwd(), 'monitoring_logs.json');
 
 // Initialize Telegram Bot for receiving commands
