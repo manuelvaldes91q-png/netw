@@ -10,12 +10,56 @@ dotenv.config();
 
 const LOGS_FILE = path.join(process.cwd(), 'monitoring_logs.json');
 
-// Initialize Telegram Bot for receiving commands
+interface MikrotikStatus {
+  host: string;
+  ip?: string;
+  status: 'up' | 'down';
+  message: string;
+  timestamp: string;
+}
+
+// In-memory store for monitoring state
+let currentStatuses: Record<string, MikrotikStatus> = {};
+let logs: MikrotikStatus[] = [];
+let config = {
+  telegramChatIds: process.env.TELEGRAM_CHAT_ID || '',
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
+  adminUsername: process.env.ADMIN_USERNAME || 'admin',
+  adminPassword: process.env.ADMIN_PASSWORD || '',
+};
+
 let telegramBot: TelegramBot | null = null;
-if (process.env.TELEGRAM_BOT_TOKEN) {
+
+async function setupTelegramBot(token: string) {
+  if (telegramBot) {
+    try {
+      await telegramBot.stopPolling({ cancel: true });
+      console.log('[TELEGRAM] Stopped previous bot polling instance');
+    } catch (e) {
+      console.warn('[TELEGRAM] Error stopping previous bot polling:', e);
+    }
+    telegramBot = null;
+  }
+
+  const cleanToken = token ? token.trim() : '';
+  if (!cleanToken) {
+    console.log('[TELEGRAM] No bot token provided. Telegram polling disabled.');
+    return;
+  }
+
   try {
-    telegramBot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
-    console.log('[TELEGRAM] Bot polling started');
+    telegramBot = new TelegramBot(cleanToken, { polling: true });
+
+    telegramBot.on('polling_error', (error: any) => {
+      const msg = error?.message || String(error);
+      if (msg.includes('409 Conflict') || error?.code === 'ETELEGRAM') {
+        console.warn('[TELEGRAM] Polling conflict notice (409 Conflict). Ensure only one bot process is running with this token.');
+      } else {
+        console.warn('[TELEGRAM] Polling error:', msg);
+      }
+    });
+
+    console.log('[TELEGRAM] Bot polling started with token ending in ...' + cleanToken.slice(-4));
 
     const sendPanel = (chatId: number) => {
       const summary = getStatusSummary();
@@ -58,21 +102,6 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
   }
 }
 
-interface MikrotikStatus {
-  host: string;
-  ip?: string;
-  status: 'up' | 'down';
-  message: string;
-  timestamp: string;
-}
-
-// In-memory store for monitoring state
-let currentStatuses: Record<string, MikrotikStatus> = {};
-let logs: MikrotikStatus[] = [];
-let config = {
-  telegramChatIds: process.env.TELEGRAM_CHAT_ID || ''
-};
-
 // Initialize state from file if exists
 try {
   if (fs.existsSync(LOGS_FILE)) {
@@ -80,13 +109,21 @@ try {
     currentStatuses = data.currentStatuses || {};
     logs = data.logs || [];
     if (data.config) {
-      config = { ...config, ...data.config };
+      config = {
+        telegramChatIds: data.config.telegramChatIds ?? config.telegramChatIds,
+        telegramBotToken: data.config.telegramBotToken ?? config.telegramBotToken,
+        adminUsername: data.config.adminUsername ?? config.adminUsername,
+        adminPassword: data.config.adminPassword ?? config.adminPassword,
+      };
     }
     console.log(`[PERSISTENCE] Loaded ${logs.length} logs and config from disk.`);
   }
 } catch (err) {
   console.error('[PERSISTENCE] Error loading logs:', err);
 }
+
+// Initial setup of Telegram bot
+setupTelegramBot(config.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || '');
 
 let clients: any[] = [];
 let lastHeartbeat: string | null = null;
@@ -149,6 +186,21 @@ function calculateUptime(host: string): number {
   return Math.min(100, Math.max(0, parseFloat(uptimePercent.toFixed(2))));
 }
 
+function getConfigForClient(isAuthenticated = false) {
+  const activeToken = config.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || '';
+  const activeChatIds = config.telegramChatIds || process.env.TELEGRAM_CHAT_ID || '';
+
+  return {
+    telegramChatIds: activeChatIds,
+    telegramBotToken: isAuthenticated 
+      ? activeToken 
+      : (activeToken ? (activeToken.length > 8 ? activeToken.slice(0, 4) + '••••••••' + activeToken.slice(-4) : '••••••••') : ''),
+    telegramConfigured: !!(activeToken && activeChatIds),
+    hasAdminPassword: !!config.adminPassword,
+    adminUsername: config.adminUsername || 'admin',
+  };
+}
+
 function broadcastStatus() {
   const currentWithUptime = Object.values(currentStatuses).map(n => ({
     ...n,
@@ -158,10 +210,7 @@ function broadcastStatus() {
   const data = JSON.stringify({
     current: currentWithUptime,
     logs: logs.slice(0, 50),
-    config: {
-      telegramChatIds: config.telegramChatIds,
-      telegramConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && (config.telegramChatIds || process.env.TELEGRAM_CHAT_ID)),
-    }
+    config: getConfigForClient(false)
   });
   
   clients.forEach(client => client.res.write(`data: ${data}\n\n`));
@@ -240,7 +289,7 @@ const startHeartbeatWatchdog = () => {
 };
 
 async function sendTelegramNotification(message: string) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const token = config.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
   const chatIdEnv = config.telegramChatIds || process.env.TELEGRAM_CHAT_ID;
 
   if (!token || !chatIdEnv) {
@@ -455,9 +504,7 @@ async function startServer() {
     const initialState = JSON.stringify({
       current: Object.values(currentStatuses),
       logs: logs.slice(0, 50),
-      config: {
-        telegramConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
-      }
+      config: getConfigForClient(false)
     });
     res.write(`data: ${initialState}\n\n`);
 
@@ -466,17 +513,77 @@ async function startServer() {
     });
   });
 
-  // API to update config
-  app.post('/api/config', express.json(), (req, res) => {
-    const { telegramChatIds } = req.body;
+  // API to verify admin credentials
+  app.post('/api/auth/login', express.json(), (req, res) => {
+    const { username, password } = req.body || {};
+    const expectedUser = config.adminUsername || 'admin';
+
+    // If no password set yet
+    if (!config.adminPassword) {
+      return res.json({ success: true, message: 'No hay contraseña configurada', config: getConfigForClient(true) });
+    }
+
+    if (username === expectedUser && password === config.adminPassword) {
+      return res.json({ success: true, config: getConfigForClient(true) });
+    } else {
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+    }
+  });
+
+  // API to get config (authenticated or unauthenticated)
+  app.get('/api/config', (req, res) => {
+    const reqUser = req.headers['x-admin-user'] as string;
+    const reqPass = req.headers['x-admin-pass'] as string;
+    
+    const isAuthenticated = !config.adminPassword || (
+      reqUser === (config.adminUsername || 'admin') && reqPass === config.adminPassword
+    );
+
+    res.json({ config: getConfigForClient(isAuthenticated) });
+  });
+
+  // API to update config (protected if adminPassword is set)
+  app.post('/api/config', express.json(), async (req, res) => {
+    const { 
+      telegramChatIds, 
+      telegramBotToken, 
+      adminUsername, 
+      adminPassword, 
+      currentPassword, 
+      reqUser, 
+      reqPass 
+    } = req.body || {};
+
+    // Check authorization if password is set
+    if (config.adminPassword) {
+      const userToTest = reqUser || req.headers['x-admin-user'];
+      const passToTest = currentPassword || reqPass || req.headers['x-admin-pass'];
+
+      if (userToTest !== (config.adminUsername || 'admin') || passToTest !== config.adminPassword) {
+        return res.status(401).json({ error: 'Contraseña de administración incorrecta.' });
+      }
+    }
+
     if (typeof telegramChatIds === 'string') {
       config.telegramChatIds = telegramChatIds;
-      persistState();
-      broadcastStatus();
-      res.json({ status: 'ok', config });
-    } else {
-      res.status(400).json({ error: 'Invalid config' });
     }
+
+    if (typeof telegramBotToken === 'string') {
+      config.telegramBotToken = telegramBotToken.trim();
+      await setupTelegramBot(config.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || '');
+    }
+
+    if (typeof adminUsername === 'string' && adminUsername.trim()) {
+      config.adminUsername = adminUsername.trim();
+    }
+
+    if (typeof adminPassword === 'string') {
+      config.adminPassword = adminPassword.trim();
+    }
+
+    persistState();
+    broadcastStatus();
+    res.json({ status: 'ok', config: getConfigForClient(true) });
   });
 
   // API to get current status and logs for the frontend (fallback)
@@ -489,10 +596,7 @@ async function startServer() {
     res.json({
       current: currentWithUptime,
       logs: logs.slice(0, 50),
-      config: {
-        telegramChatIds: config.telegramChatIds,
-        telegramConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && (config.telegramChatIds || process.env.TELEGRAM_CHAT_ID)),
-      }
+      config: getConfigForClient(false)
     });
   });
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, FormEvent } from 'react';
-import { Terminal, Shield, Wifi, Cpu, Clock, Activity, Bell, ChevronRight, Settings, Code, Info } from 'lucide-react';
+import { Terminal, Shield, Wifi, Cpu, Clock, Activity, Bell, ChevronRight, Settings, Code, Info, Eye, EyeOff, Lock, Unlock, User, CheckCircle, AlertTriangle, Key } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface MikrotikStatus {
@@ -17,6 +17,9 @@ interface MonitorData {
   config: {
     telegramConfigured: boolean;
     telegramChatIds: string;
+    telegramBotToken?: string;
+    hasAdminPassword?: boolean;
+    adminUsername?: string;
   };
 }
 
@@ -30,30 +33,130 @@ export default function App() {
   const [command, setCommand] = useState('');
   const [terminalOutput, setTerminalOutput] = useState<string[]>(['MikroWatch OS v2.0.5 NOC Inicializado...', 'Sistema: PASS', 'Red: SEGURA', 'Esperando broadcast del MikroTik...']);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'logs' | 'settings'>('dashboard');
-  const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
+
+  // Authentication & Settings States
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [loginUser, setLoginUser] = useState('admin');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Config Form Fields
+  const [newBotToken, setNewBotToken] = useState('');
   const [newChatIds, setNewChatIds] = useState('');
+  const [newAdminUser, setNewAdminUser] = useState('admin');
+  const [newAdminPass, setNewAdminPass] = useState('');
+  const [confirmAdminPass, setConfirmAdminPass] = useState('');
+
+  // UI Toggles & Feedback
+  const [showBotToken, setShowBotToken] = useState(false);
+  const [showAdminPass, setShowAdminPass] = useState(false);
+  const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
+  const [configSuccessMsg, setConfigSuccessMsg] = useState('');
+  const [configErrorMsg, setConfigErrorMsg] = useState('');
+
   const outputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (data.config.telegramChatIds !== undefined) {
-      setNewChatIds(data.config.telegramChatIds);
+    if (data.config) {
+      if (data.config.telegramChatIds !== undefined) {
+        setNewChatIds(data.config.telegramChatIds);
+      }
+      if (data.config.telegramBotToken !== undefined && data.config.telegramBotToken !== '••••••••') {
+        setNewBotToken(data.config.telegramBotToken);
+      }
+      if (data.config.adminUsername) {
+        setNewAdminUser(data.config.adminUsername);
+        if (!loginUser) setLoginUser(data.config.adminUsername);
+      }
+      // If server does not have an admin password configured, unlock automatically
+      if (!data.config.hasAdminPassword) {
+        setIsUnlocked(true);
+      }
     }
-  }, [data.config.telegramChatIds]);
+  }, [data.config]);
 
-  const handleUpdateConfig = async () => {
-    setIsUpdatingConfig(true);
+  const handleLogin = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
+    setIsLoggingIn(true);
+    setLoginError('');
     try {
-      const response = await fetch('/api/config', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telegramChatIds: newChatIds })
+        body: JSON.stringify({ username: loginUser || 'admin', password: loginPass })
       });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        setIsUnlocked(true);
+        setLoginError('');
+        if (result.config) {
+          if (result.config.telegramBotToken) setNewBotToken(result.config.telegramBotToken);
+          if (result.config.telegramChatIds) setNewChatIds(result.config.telegramChatIds);
+          if (result.config.adminUsername) setNewAdminUser(result.config.adminUsername);
+        }
+      } else {
+        setLoginError(result.error || 'Credenciales incorrectas');
+      }
+    } catch (err) {
+      setLoginError('Error de conexión con el servidor');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleUpdateConfig = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
+    setConfigSuccessMsg('');
+    setConfigErrorMsg('');
+
+    if (newAdminPass && newAdminPass !== confirmAdminPass) {
+      setConfigErrorMsg('Las contraseñas de administración no coinciden');
+      return;
+    }
+
+    setIsUpdatingConfig(true);
+    try {
+      const payload: any = {
+        telegramChatIds: newChatIds,
+        telegramBotToken: newBotToken,
+        adminUsername: newAdminUser,
+        reqUser: loginUser || newAdminUser || 'admin',
+        reqPass: loginPass
+      };
+
+      if (newAdminPass.trim()) {
+        payload.adminPassword = newAdminPass.trim();
+      }
+
+      const response = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-user': loginUser || newAdminUser || 'admin',
+          'x-admin-pass': loginPass
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const resData = await response.json();
+
       if (response.ok) {
-        alert('Configuración guardada correctamente.');
+        setConfigSuccessMsg('Configuración guardada y aplicada correctamente en el servidor.');
+        if (newAdminPass.trim()) {
+          setLoginPass(newAdminPass.trim());
+          setNewAdminPass('');
+          setConfirmAdminPass('');
+        }
+        if (resData.config?.telegramBotToken) {
+          setNewBotToken(resData.config.telegramBotToken);
+        }
+      } else {
+        setConfigErrorMsg(resData.error || 'Error al guardar la configuración');
       }
     } catch (err) {
       console.error(err);
-      alert('Error al guardar configuración.');
+      setConfigErrorMsg('Error de comunicación con el servidor.');
     } finally {
       setIsUpdatingConfig(false);
     }
@@ -442,70 +545,251 @@ export default function App() {
           /* SETTINGS VIEW */
           <section className="flex-1 p-4 sm:p-8 overflow-y-auto bg-black/40">
             <div className="max-w-2xl mx-auto space-y-8">
-              <div className="flex items-center gap-3 opacity-50 mb-6">
-                <Settings className="w-6 h-6 text-neon-amber" />
-                <span className="text-lg font-black uppercase tracking-[0.3em] text-neon-amber">Configuración del Sistema</span>
+              <div className="flex items-center justify-between opacity-80 mb-6 border-b border-white/10 pb-4">
+                <div className="flex items-center gap-3">
+                  <Settings className="w-6 h-6 text-neon-amber" />
+                  <span className="text-lg font-black uppercase tracking-[0.3em] text-neon-amber">Configuración del Sistema</span>
+                </div>
+                {data.config?.hasAdminPassword && isUnlocked && (
+                  <button 
+                    onClick={() => { setIsUnlocked(false); setLoginPass(''); }}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-white/5 border border-white/10 rounded text-[10px] uppercase font-bold text-white/60 hover:text-white"
+                  >
+                    <Lock className="w-3 h-3 text-neon-amber" />
+                    Bloquear Ajustes
+                  </button>
+                )}
               </div>
 
-              {/* TELEGRAM MANAGEMENT */}
-              <div className="p-6 border border-white/10 bg-white/[0.02] rounded-sm space-y-6 shadow-2xl">
-                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                       <div className={`w-3 h-3 rounded-full ${data.config?.telegramConfigured ? 'bg-neon-green shadow-[0_0_10px_rgba(0,255,65,0.5)]' : 'bg-red-500'}`} />
-                       <h3 className="font-black uppercase tracking-widest text-sm">Notificaciones de Telegram</h3>
+              {data.config?.hasAdminPassword && !isUnlocked ? (
+                /* AUTH LOCK SCREEN */
+                <div className="max-w-md mx-auto my-8 p-6 sm:p-8 border border-neon-amber/30 bg-black/80 rounded-sm shadow-2xl space-y-6">
+                  <div className="flex flex-col items-center text-center gap-2">
+                    <div className="p-3 bg-neon-amber/10 rounded-full border border-neon-amber/30">
+                      <Lock className="w-8 h-8 text-neon-amber" />
                     </div>
-                    {data.config?.telegramConfigured && <Bell className="w-4 h-4 text-neon-green" />}
-                 </div>
+                    <h2 className="text-lg font-black uppercase tracking-widest text-neon-amber">Acceso Restringido a Ajustes</h2>
+                    <p className="text-xs opacity-60">Ingresa tu usuario y clave para modificar los Tokens de Telegram y seguridad.</p>
+                  </div>
 
-                 <div className="space-y-4">
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    {loginError && (
+                      <div className="p-3 bg-red-950/40 border border-red-500/40 rounded text-red-400 text-xs flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>{loginError}</span>
+                      </div>
+                    )}
+
                     <div>
-                      <label className="block text-[10px] font-black opacity-40 uppercase tracking-widest mb-2">IDs de Mensajería (Chat IDs)</label>
-                      <textarea 
-                        value={newChatIds}
-                        onChange={(e) => setNewChatIds(e.target.value)}
-                        placeholder="Ingresa los IDs separados por comas. Ejemplo: 123456, 789012"
-                        className="w-full bg-black/60 border border-white/10 rounded p-4 font-mono text-xs focus:border-neon-amber/50 focus:outline-none transition-colors min-h-[100px] text-neon-amber"
-                      />
-                      <p className="text-[10px] opacity-30 mt-2 italic">* Puedes agregar múltiples IDs separados por comas para que las alertas lleguen a varias personas.</p>
-                      <p className="text-[10px] opacity-30 mt-1 italic">* En tu VPS, estos se guardan en el archivo monitoring_logs.json automáticamente.</p>
+                      <label className="block text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Usuario</label>
+                      <div className="flex items-center gap-2 bg-black/60 border border-white/10 rounded p-2.5 focus-within:border-neon-amber/50">
+                        <User className="w-4 h-4 text-neon-amber/70" />
+                        <input 
+                          type="text" 
+                          value={loginUser} 
+                          onChange={(e) => setLoginUser(e.target.value)}
+                          placeholder="admin"
+                          className="w-full bg-transparent outline-none font-mono text-xs text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Contraseña</label>
+                      <div className="flex items-center gap-2 bg-black/60 border border-white/10 rounded p-2.5 focus-within:border-neon-amber/50">
+                        <Key className="w-4 h-4 text-neon-amber/70" />
+                        <input 
+                          type="password" 
+                          value={loginPass} 
+                          onChange={(e) => setLoginPass(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full bg-transparent outline-none font-mono text-xs text-white"
+                        />
+                      </div>
                     </div>
 
                     <button 
-                      onClick={handleUpdateConfig}
-                      disabled={isUpdatingConfig}
-                      className="px-8 py-3 bg-neon-amber text-black font-black text-[10px] uppercase tracking-widest rounded-sm hover:opacity-90 disabled:opacity-50 transition-all font-sans"
+                      type="submit" 
+                      disabled={isLoggingIn}
+                      className="w-full py-3 bg-neon-amber text-black font-black text-xs uppercase tracking-widest rounded-sm hover:opacity-90 disabled:opacity-50 transition-all font-sans cursor-pointer"
                     >
-                      {isUpdatingConfig ? 'Guardando...' : 'Guardar IDs de Telegram'}
+                      {isLoggingIn ? 'Verificando...' : 'Desbloquear Ajustes'}
                     </button>
-                 </div>
-              </div>
+                  </form>
 
-              {/* MIKROTIK HELP */}
-              <div className="p-6 border border-white/10 bg-white/[0.02] rounded-sm space-y-4 shadow-xl">
-                 <div className="flex items-center gap-3">
-                    <Code className="w-5 h-5 text-neon-blue" />
-                    <h3 className="font-black uppercase tracking-widest text-sm text-neon-blue">MikroTik Webhook Config</h3>
-                 </div>
-                 
-                 <div className="space-y-3">
-                    <p className="text-xs opacity-60">Usa esta URL en tus Netwatch scripts:</p>
-                    <div className="group relative">
-                       <code className="block break-all bg-black/80 font-mono text-[10px] p-4 border border-neon-blue/20 text-neon-blue rounded overflow-hidden select-all">
-                         {`http://${window.location.host}/api/mikrotik/webhook?host=NODO_NOMBRE&status=up`}
-                       </code>
+                  <p className="text-[10px] opacity-40 text-center italic">
+                    * Los pulsos HTTP de tu MikroTik continuarán registrándose normalmente sin necesidad de clave.
+                  </p>
+                </div>
+              ) : (
+                /* UNLOCKED SETTINGS FORM */
+                <form onSubmit={handleUpdateConfig} className="space-y-8">
+                  {configSuccessMsg && (
+                    <div className="p-4 bg-neon-green/10 border border-neon-green/30 rounded text-neon-green text-xs flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 shrink-0" />
+                      <span>{configSuccessMsg}</span>
                     </div>
-                    <div className="p-4 bg-blue-950/20 border border-neon-blue/10 rounded sm space-y-2">
-                       <p className="text-[9px] font-black text-neon-blue uppercase">Instrucciones de Uso:</p>
-                       <ul className="text-[10px] space-y-2 opacity-60 list-disc list-inside">
-                         <li>Accede a MikroTik via Winbox</li>
-                         <li>Ve a <span className="font-bold">Tools {">"} Netwatch</span></li>
-                         <li>Crea un nuevo host para monitorear</li>
-                         <li>En la pestaña <span className="text-neon-green">Up</span>, pega el script fetch con tu URL</li>
-                         <li>En la pestaña <span className="text-red-500">Down</span>, pega la misma URL pero con <span className="font-bold underline">status=down</span></li>
-                       </ul>
+                  )}
+
+                  {configErrorMsg && (
+                    <div className="p-4 bg-red-950/40 border border-red-500/40 rounded text-red-400 text-xs flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>{configErrorMsg}</span>
                     </div>
-                 </div>
-              </div>
+                  )}
+
+                  {/* TELEGRAM BOT CONFIGURATION */}
+                  <div className="p-6 border border-white/10 bg-white/[0.02] rounded-sm space-y-6 shadow-2xl">
+                     <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                        <div className="flex items-center gap-3">
+                           <div className={`w-3 h-3 rounded-full ${data.config?.telegramConfigured ? 'bg-neon-green shadow-[0_0_10px_rgba(0,255,65,0.5)]' : 'bg-red-500'}`} />
+                           <h3 className="font-black uppercase tracking-widest text-sm text-white">Bot de Telegram</h3>
+                        </div>
+                        {data.config?.telegramConfigured && <Bell className="w-4 h-4 text-neon-green" />}
+                     </div>
+
+                     <div className="space-y-5">
+                        {/* BOT TOKEN FIELD */}
+                        <div>
+                          <label className="block text-[10px] font-black opacity-60 uppercase tracking-widest mb-2 text-neon-amber">
+                            Token de la API de Telegram (Bot Token)
+                          </label>
+                          <div className="relative flex items-center">
+                            <input 
+                              type={showBotToken ? 'text' : 'password'}
+                              value={newBotToken}
+                              onChange={(e) => setNewBotToken(e.target.value)}
+                              placeholder="Ej: 7890123456:AAFx1234567890abcdef..."
+                              className="w-full bg-black/60 border border-white/10 rounded p-3 pr-10 font-mono text-xs focus:border-neon-amber/50 focus:outline-none transition-colors text-neon-amber"
+                            />
+                            <button 
+                              type="button" 
+                              onClick={() => setShowBotToken(!showBotToken)}
+                              className="absolute right-3 opacity-50 hover:opacity-100 transition-opacity text-white"
+                            >
+                              {showBotToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          <p className="text-[10px] opacity-40 mt-1 italic">
+                            * Puedes escribir aquí tu Bot Token generado en @BotFather sin modificar las variables de entorno de Render/VPS.
+                          </p>
+                        </div>
+
+                        {/* CHAT IDS FIELD */}
+                        <div>
+                          <label className="block text-[10px] font-black opacity-60 uppercase tracking-widest mb-2 text-neon-amber">
+                            IDs de Mensajería (Chat IDs)
+                          </label>
+                          <textarea 
+                            value={newChatIds}
+                            onChange={(e) => setNewChatIds(e.target.value)}
+                            placeholder="Ingresa los IDs separados por comas. Ejemplo: 123456, 789012"
+                            className="w-full bg-black/60 border border-white/10 rounded p-3 font-mono text-xs focus:border-neon-amber/50 focus:outline-none transition-colors min-h-[80px] text-neon-amber"
+                          />
+                          <p className="text-[10px] opacity-40 mt-1 italic">
+                            * Agrega múltiples Chat IDs separados por comas. Se guardan permanentemente en tu servidor.
+                          </p>
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* SECURITY / ADMIN ACCESS CONFIGURATION */}
+                  <div className="p-6 border border-white/10 bg-white/[0.02] rounded-sm space-y-6 shadow-2xl">
+                     <div className="flex items-center gap-3 border-b border-white/5 pb-4">
+                        <Lock className="w-5 h-5 text-neon-amber" />
+                        <h3 className="font-black uppercase tracking-widest text-sm text-white">Seguridad de Ajustes (Usuario y Clave)</h3>
+                     </div>
+
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black opacity-60 uppercase tracking-widest mb-2">Usuario Administrador</label>
+                          <input 
+                            type="text"
+                            value={newAdminUser}
+                            onChange={(e) => setNewAdminUser(e.target.value)}
+                            placeholder="admin"
+                            className="w-full bg-black/60 border border-white/10 rounded p-3 font-mono text-xs focus:border-neon-amber/50 focus:outline-none transition-colors text-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-black opacity-60 uppercase tracking-widest mb-2">Nueva Contraseña (Opcional)</label>
+                          <div className="relative flex items-center">
+                            <input 
+                              type={showAdminPass ? 'text' : 'password'}
+                              value={newAdminPass}
+                              onChange={(e) => setNewAdminPass(e.target.value)}
+                              placeholder="Dejar en blanco para no cambiar"
+                              className="w-full bg-black/60 border border-white/10 rounded p-3 pr-10 font-mono text-xs focus:border-neon-amber/50 focus:outline-none transition-colors text-white"
+                            />
+                            <button 
+                              type="button" 
+                              onClick={() => setShowAdminPass(!showAdminPass)}
+                              className="absolute right-3 opacity-50 hover:opacity-100 transition-opacity text-white"
+                            >
+                              {showAdminPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {newAdminPass && (
+                          <div className="md:col-span-2">
+                            <label className="block text-[10px] font-black opacity-60 uppercase tracking-widest mb-2">Confirmar Nueva Contraseña</label>
+                            <input 
+                              type="password"
+                              value={confirmAdminPass}
+                              onChange={(e) => setConfirmAdminPass(e.target.value)}
+                              placeholder="Repite la nueva contraseña"
+                              className="w-full bg-black/60 border border-white/10 rounded p-3 font-mono text-xs focus:border-neon-amber/50 focus:outline-none transition-colors text-white"
+                            />
+                          </div>
+                        )}
+                     </div>
+
+                     <p className="text-[10px] opacity-40 italic">
+                       * Al configurar un usuario y contraseña, solo quien tenga estas credenciales podrá modificar la configuración. Los reportes de MikroTik continuarán funcionando automáticamente.
+                     </p>
+                  </div>
+
+                  {/* SAVE BUTTON */}
+                  <div className="flex justify-end">
+                    <button 
+                      type="submit"
+                      disabled={isUpdatingConfig}
+                      className="px-8 py-3.5 bg-neon-amber text-black font-black text-xs uppercase tracking-widest rounded-sm hover:opacity-90 disabled:opacity-50 transition-all font-sans cursor-pointer shadow-lg"
+                    >
+                      {isUpdatingConfig ? 'Guardando Cambios...' : 'Guardar Configuración'}
+                    </button>
+                  </div>
+
+                  {/* MIKROTIK HELP */}
+                  <div className="p-6 border border-white/10 bg-white/[0.02] rounded-sm space-y-4 shadow-xl">
+                     <div className="flex items-center gap-3">
+                        <Code className="w-5 h-5 text-neon-blue" />
+                        <h3 className="font-black uppercase tracking-widest text-sm text-neon-blue">MikroTik Webhook Config</h3>
+                     </div>
+                     
+                     <div className="space-y-3">
+                        <p className="text-xs opacity-60">Usa esta URL en tus Netwatch scripts:</p>
+                        <div className="group relative">
+                           <code className="block break-all bg-black/80 font-mono text-[10px] p-4 border border-neon-blue/20 text-neon-blue rounded overflow-hidden select-all">
+                             {`http://${window.location.host}/api/mikrotik/webhook?host=NODO_NOMBRE&status=up`}
+                           </code>
+                        </div>
+                        <div className="p-4 bg-blue-950/20 border border-neon-blue/10 rounded-sm space-y-2">
+                           <p className="text-[9px] font-black text-neon-blue uppercase">Instrucciones de Uso:</p>
+                           <ul className="text-[10px] space-y-2 opacity-60 list-disc list-inside">
+                             <li>Accede a MikroTik via Winbox</li>
+                             <li>Ve a <span className="font-bold">Tools {">"} Netwatch</span></li>
+                             <li>Crea un nuevo host para monitorear</li>
+                             <li>En la pestaña <span className="text-neon-green">Up</span>, pega el script fetch con tu URL</li>
+                             <li>En la pestaña <span className="text-red-500">Down</span>, pega la misma URL pero con <span className="font-bold underline">status=down</span></li>
+                           </ul>
+                        </div>
+                     </div>
+                  </div>
+                </form>
+              )}
             </div>
           </section>
         )}
