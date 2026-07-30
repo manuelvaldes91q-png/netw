@@ -76,6 +76,38 @@ export default function App() {
     }
   }, [data.config]);
 
+  const [isTestingTelegram, setIsTestingTelegram] = useState(false);
+
+  const handleTestTelegram = async () => {
+    setIsTestingTelegram(true);
+    setConfigSuccessMsg('');
+    setConfigErrorMsg('');
+    try {
+      const response = await fetch('/api/telegram/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-user': loginUser || newAdminUser || 'admin',
+          'x-admin-pass': loginPass
+        },
+        body: JSON.stringify({
+          reqUser: loginUser || newAdminUser || 'admin',
+          reqPass: loginPass
+        })
+      });
+      const resData = await response.json();
+      if (response.ok && resData.success) {
+        setConfigSuccessMsg(`✅ ${resData.message}`);
+      } else {
+        setConfigErrorMsg(`❌ ${resData.error || 'Error al enviar mensaje de prueba'}`);
+      }
+    } catch (err) {
+      setConfigErrorMsg('❌ Error de conexión al probar Telegram');
+    } finally {
+      setIsTestingTelegram(false);
+    }
+  };
+
   const handleLogin = async (e?: FormEvent) => {
     if (e) e.preventDefault();
     setIsLoggingIn(true);
@@ -645,7 +677,17 @@ export default function App() {
                            <div className={`w-3 h-3 rounded-full ${data.config?.telegramConfigured ? 'bg-neon-green shadow-[0_0_10px_rgba(0,255,65,0.5)]' : 'bg-red-500'}`} />
                            <h3 className="font-black uppercase tracking-widest text-sm text-white">Bot de Telegram</h3>
                         </div>
-                        {data.config?.telegramConfigured && <Bell className="w-4 h-4 text-neon-green" />}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleTestTelegram}
+                            disabled={isTestingTelegram}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-blue/10 border border-neon-blue/40 hover:bg-neon-blue/20 text-neon-blue rounded text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                          >
+                            <Bell className="w-3.5 h-3.5" />
+                            {isTestingTelegram ? 'Enviando...' : 'Probar Notificación'}
+                          </button>
+                        </div>
                      </div>
 
                      <div className="space-y-5">
@@ -659,7 +701,7 @@ export default function App() {
                               type={showBotToken ? 'text' : 'password'}
                               value={newBotToken}
                               onChange={(e) => setNewBotToken(e.target.value)}
-                              placeholder="Ej: 7890123456:AAFx1234567890abcdef..."
+                              placeholder="Escribe tu Bot Token completo (Ej: 8123456789:AAFx...)"
                               className="w-full bg-black/60 border border-white/10 rounded p-3 pr-10 font-mono text-xs focus:border-neon-amber/50 focus:outline-none transition-colors text-neon-amber"
                             />
                             <button 
@@ -670,8 +712,8 @@ export default function App() {
                               {showBotToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                           </div>
-                          <p className="text-[10px] opacity-40 mt-1 italic">
-                            * Puedes escribir aquí tu Bot Token generado en @BotFather sin modificar las variables de entorno de Render/VPS.
+                          <p className="text-[10px] opacity-60 mt-1.5 text-white/70">
+                            💡 <b>Importante:</b> Copia tu Bot Token completo de @BotFather en Telegram (ejemplo: <code className="text-neon-amber">812345678:AAHxx...</code>) y haz clic en "Guardar Configuración".
                           </p>
                         </div>
 
@@ -683,11 +725,11 @@ export default function App() {
                           <textarea 
                             value={newChatIds}
                             onChange={(e) => setNewChatIds(e.target.value)}
-                            placeholder="Ingresa los IDs separados por comas. Ejemplo: 123456, 789012"
+                            placeholder="Ingresa los IDs separados por comas. Ejemplo: 1546246301, 1754434649"
                             className="w-full bg-black/60 border border-white/10 rounded p-3 font-mono text-xs focus:border-neon-amber/50 focus:outline-none transition-colors min-h-[80px] text-neon-amber"
                           />
                           <p className="text-[10px] opacity-40 mt-1 italic">
-                            * Agrega múltiples Chat IDs separados por comas. Se guardan permanentemente en tu servidor.
+                            * Agrega múltiples Chat IDs separados por comas. Haz clic en "Probar Notificación" arriba para verificar la recepción en tu Telegram.
                           </p>
                         </div>
                      </div>

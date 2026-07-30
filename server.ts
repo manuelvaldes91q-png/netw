@@ -42,8 +42,8 @@ async function setupTelegramBot(token: string) {
   }
 
   const cleanToken = token ? token.trim() : '';
-  if (!cleanToken) {
-    console.log('[TELEGRAM] No bot token provided. Telegram polling disabled.');
+  if (!cleanToken || cleanToken.includes('•') || cleanToken.includes('*')) {
+    console.log('[TELEGRAM] No valid bot token provided (empty or masked). Telegram polling disabled.');
     return;
   }
 
@@ -189,15 +189,17 @@ function calculateUptime(host: string): number {
 function getConfigForClient(isAuthenticated = false) {
   const activeToken = config.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || '';
   const activeChatIds = config.telegramChatIds || process.env.TELEGRAM_CHAT_ID || '';
+  const isCorrupted = activeToken.includes('•') || activeToken.includes('*');
 
   return {
     telegramChatIds: activeChatIds,
     telegramBotToken: isAuthenticated 
-      ? activeToken 
-      : (activeToken ? (activeToken.length > 8 ? activeToken.slice(0, 4) + '••••••••' + activeToken.slice(-4) : '••••••••') : ''),
-    telegramConfigured: !!(activeToken && activeChatIds),
+      ? (isCorrupted ? '' : activeToken) 
+      : (activeToken && !isCorrupted ? (activeToken.length > 8 ? activeToken.slice(0, 4) + '••••••••' + activeToken.slice(-4) : '••••••••') : ''),
+    telegramConfigured: !!(activeToken && !isCorrupted && activeChatIds),
     hasAdminPassword: !!config.adminPassword,
     adminUsername: config.adminUsername || 'admin',
+    isTokenCorrupted: isCorrupted
   };
 }
 
@@ -292,13 +294,14 @@ async function sendTelegramNotification(message: string) {
   const token = config.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
   const chatIdEnv = config.telegramChatIds || process.env.TELEGRAM_CHAT_ID;
 
-  if (!token || !chatIdEnv) {
-    console.warn('Telegram token or chat ID not configured.');
-    return;
+  if (!token || token.includes('•') || token.includes('*') || !chatIdEnv) {
+    console.warn('[TELEGRAM] Telegram token or chat ID not valid or not configured.');
+    return [{ success: false, error: 'Token de Telegram inválido o enmascarado (••••)' }];
   }
 
   // Support multiple chat IDs separated by commas or spaces
   const chatIds = chatIdEnv.split(/[,\s]+/).filter(id => id.trim().length > 0);
+  const results: Array<{ chatId: string; success: boolean; error?: any }> = [];
 
   for (const chatId of chatIds) {
     try {
@@ -313,16 +316,21 @@ async function sendTelegramNotification(message: string) {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error(`Telegram API error for chat ID ${chatId}:`, errorData);
+      const responseData = await response.json();
+      if (!response.ok || !responseData.ok) {
+        console.error(`Telegram API error for chat ID ${chatId}:`, responseData);
+        results.push({ chatId, success: false, error: responseData.description || responseData.error_code || 'Error de Telegram' });
       } else {
         console.log(`[TELEGRAM] Notification sent to ${chatId}`);
+        results.push({ chatId, success: true });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Failed to send Telegram notification to ${chatId}:`, error);
+      results.push({ chatId, success: false, error: error?.message || 'Error de conexión' });
     }
   }
+
+  return results;
 }
 
 async function startServer() {
@@ -569,8 +577,12 @@ async function startServer() {
     }
 
     if (typeof telegramBotToken === 'string') {
-      config.telegramBotToken = telegramBotToken.trim();
-      await setupTelegramBot(config.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || '');
+      const cleanToken = telegramBotToken.trim();
+      // Only update token if it is not empty and does NOT contain mask characters '•' or '*'
+      if (cleanToken && !cleanToken.includes('•') && !cleanToken.includes('*')) {
+        config.telegramBotToken = cleanToken;
+        await setupTelegramBot(config.telegramBotToken);
+      }
     }
 
     if (typeof adminUsername === 'string' && adminUsername.trim()) {
@@ -584,6 +596,57 @@ async function startServer() {
     persistState();
     broadcastStatus();
     res.json({ status: 'ok', config: getConfigForClient(true) });
+  });
+
+  // API to test Telegram notification
+  app.post('/api/telegram/test', express.json(), async (req, res) => {
+    if (config.adminPassword) {
+      const userToTest = req.headers['x-admin-user'] || req.body?.reqUser;
+      const passToTest = req.headers['x-admin-pass'] || req.body?.reqPass;
+
+      if (userToTest !== (config.adminUsername || 'admin') || passToTest !== config.adminPassword) {
+        return res.status(401).json({ error: 'No autorizado' });
+      }
+    }
+
+    const activeToken = config.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || '';
+    const activeChatIds = config.telegramChatIds || process.env.TELEGRAM_CHAT_ID || '';
+
+    if (!activeToken || activeToken.includes('•') || activeToken.includes('*')) {
+      return res.status(400).json({ error: 'El Bot Token no es válido o está enmascarado (••••). Escribe tu Token completo y guarda la configuración.' });
+    }
+
+    if (!activeChatIds) {
+      return res.status(400).json({ error: 'No se ha configurado ningún Chat ID de Telegram.' });
+    }
+
+    const venezuelaTime = new Date().toLocaleString('es-VE', {
+      timeZone: 'America/Caracas',
+      hour12: true,
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+
+    const testMsg = `🧪 <b>Prueba de Notificación - MikroWatch NOC</b>\n\n` +
+      `¡Hola! Si ves este mensaje, las alertas de Telegram están funcionando perfectamente.\n\n` +
+      `<b>Fecha y Hora:</b> ${venezuelaTime}`;
+
+    const results = await sendTelegramNotification(testMsg);
+    const successful = results.filter(r => r.success);
+
+    if (successful.length > 0) {
+      return res.json({ 
+        success: true, 
+        message: `Mensaje de prueba enviado exitosamente a ${successful.length} chat(s).`,
+        details: results 
+      });
+    } else {
+      const firstErr = results[0]?.error || 'Error desconocido al enviar a Telegram';
+      return res.status(400).json({ 
+        error: `Error de Telegram: ${firstErr}`, 
+        details: results 
+      });
+    }
   });
 
   // API to get current status and logs for the frontend (fallback)
