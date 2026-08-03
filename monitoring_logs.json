@@ -1,0 +1,32 @@
+{
+  "currentStatuses": {
+    "TestAntenna": {
+      "host": "TestAntenna",
+      "status": "up",
+      "message": "Host TestAntenna está en línea",
+      "timestamp": "2026-08-03T10:06:26.717Z",
+      "downtimeDuration": "7s"
+    }
+  },
+  "logs": [
+    {
+      "host": "TestAntenna",
+      "status": "up",
+      "message": "Host TestAntenna está en línea",
+      "timestamp": "2026-08-03T10:06:26.717Z",
+      "downtimeDuration": "7s"
+    },
+    {
+      "host": "TestAntenna",
+      "status": "down",
+      "message": "Host TestAntenna está fuera de línea",
+      "timestamp": "2026-08-03T10:06:18.886Z"
+    }
+  ],
+  "config": {
+    "telegramChatIds": "1754434649",
+    "telegramBotToken": "8565790855:AAHV9SaFsgjJghwkqdw6r_vIiMATV2f9Yjc",
+    "adminUsername": "admin",
+    "adminPassword": ""
+  }
+}

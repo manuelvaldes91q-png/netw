@@ -16,6 +16,7 @@ interface MikrotikStatus {
   status: 'up' | 'down';
   message: string;
   timestamp: string;
+  downtimeDuration?: string;
 }
 
 // In-memory store for monitoring state
@@ -131,11 +132,11 @@ let heartbeatTimeout: NodeJS.Timeout | null = null;
 
 function persistState() {
   try {
-    // 15 days retention policy
-    const fifteenDaysAgo = new Date();
-    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+    // 5 days retention policy
+    const fiveDaysAgo = new Date();
+    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
 
-    logs = logs.filter(log => new Date(log.timestamp) > fifteenDaysAgo);
+    logs = logs.filter(log => new Date(log.timestamp) > fiveDaysAgo);
 
     const data = JSON.stringify({ currentStatuses, logs, config }, null, 2);
     fs.writeFileSync(LOGS_FILE, data);
@@ -369,12 +370,41 @@ async function startServer() {
       second: '2-digit'
     });
 
+    let downtimeDurationStr = '';
+    
+    if (status === 'up') {
+      const lastEvent = logs.find(l => l.host === host);
+      if (lastEvent && lastEvent.status === 'down') {
+        const downTime = new Date(lastEvent.timestamp).getTime();
+        const upTime = new Date().getTime();
+        const diffMs = upTime - downTime;
+        
+        const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
+        const minutes = Math.floor((diffMs / 1000 / 60) % 60);
+        const seconds = Math.floor((diffMs / 1000) % 60);
+        
+        const parts = [];
+        if (days > 0) parts.push(`${days}d`);
+        if (hours > 0) parts.push(`${hours}h`);
+        if (minutes > 0) parts.push(`${minutes}m`);
+        if (seconds > 0) parts.push(`${seconds}s`);
+        
+        if (parts.length > 0) {
+          downtimeDurationStr = parts.join(' ');
+        } else {
+          downtimeDurationStr = '< 1s';
+        }
+      }
+    }
+
     const logEntry: MikrotikStatus = {
       host: host as string,
       ip: ip as string || undefined,
       status: (status as string).toLowerCase() as 'up' | 'down',
       message: (message as string) || `Host ${host} ${ip ? `(${ip}) ` : ''}está ${status === 'up' ? 'en línea' : 'fuera de línea'}`,
       timestamp: new Date().toISOString(),
+      ...(downtimeDurationStr ? { downtimeDuration: downtimeDurationStr } : {})
     };
 
     // Update state
@@ -390,6 +420,7 @@ async function startServer() {
       `<b>Host:</b> ${logEntry.host}\n` +
       (logEntry.ip ? `<b>IP:</b> ${logEntry.ip}\n` : '') +
       `<b>Estado:</b> ${statusText}\n` +
+      (downtimeDurationStr ? `<b>Tiempo caído:</b> ${downtimeDurationStr}\n` : '') +
       `<b>Mensaje:</b> ${logEntry.message}\n` +
       `<b>Fecha (VE):</b> ${venezuelaTime}`;
 
@@ -431,11 +462,40 @@ async function startServer() {
          second: '2-digit'
        });
 
+       let downtimeDurationStr = '';
+       
+       if (status === 'up') {
+         const lastEvent = logs.find(l => l.host === host);
+         if (lastEvent && lastEvent.status === 'down') {
+           const downTime = new Date(lastEvent.timestamp).getTime();
+           const upTime = new Date().getTime();
+           const diffMs = upTime - downTime;
+           
+           const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+           const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
+           const minutes = Math.floor((diffMs / 1000 / 60) % 60);
+           const seconds = Math.floor((diffMs / 1000) % 60);
+           
+           const parts = [];
+           if (days > 0) parts.push(`${days}d`);
+           if (hours > 0) parts.push(`${hours}h`);
+           if (minutes > 0) parts.push(`${minutes}m`);
+           if (seconds > 0) parts.push(`${seconds}s`);
+           
+           if (parts.length > 0) {
+             downtimeDurationStr = parts.join(' ');
+           } else {
+             downtimeDurationStr = '< 1s';
+           }
+         }
+       }
+
        const logEntry: MikrotikStatus = {
          host: host as string,
          status: (status as string).toLowerCase() as 'up' | 'down',
          message: `Recuperado (Typo Fixed)`,
          timestamp: new Date().toISOString(),
+         ...(downtimeDurationStr ? { downtimeDuration: downtimeDurationStr } : {})
        };
        currentStatuses[logEntry.host] = logEntry;
        logs.unshift(logEntry);
@@ -445,6 +505,7 @@ async function startServer() {
        const telegramMessage = `${emoji} <b>MikroWatch Alert (Typo Fix)</b>\n\n` +
          `<b>Host:</b> ${logEntry.host}\n` +
          `<b>Status:</b> ${logEntry.status.toUpperCase()}\n` +
+         (downtimeDurationStr ? `<b>Tiempo caído:</b> ${downtimeDurationStr}\n` : '') +
          `<b>Time (VE):</b> ${venezuelaTime}`;
 
        await sendTelegramNotification(telegramMessage);

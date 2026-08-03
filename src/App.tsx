@@ -235,7 +235,10 @@ export default function App() {
           if (result.logs.length > 0) {
             const lastLog = result.logs[0];
             setTerminalOutput(prev => {
-              const logMsg = `[${formatVE(lastLog.timestamp)}] >> ALERTA: ${lastLog.host} está ${lastLog.status === 'up' ? 'EN LÍNEA' : 'FUERA DE LÍNEA'} - ${lastLog.message}`;
+              let logMsg = `[${formatVE(lastLog.timestamp)}] >> ALERTA: ${lastLog.host} está ${lastLog.status === 'up' ? 'EN LÍNEA' : 'FUERA DE LÍNEA'} - ${lastLog.message}`;
+              if (lastLog.downtimeDuration) {
+                logMsg += ` (Tiempo caído: ${lastLog.downtimeDuration})`;
+              }
               // Avoid duplicate logs if possible
               if (prev[prev.length - 1] === logMsg) return prev;
               return [...prev, logMsg];
@@ -428,9 +431,17 @@ export default function App() {
                         </div>
 
                         <div className="flex justify-between items-center mt-1">
-                           <div className="flex items-center gap-1.5 opacity-90">
-                             <Clock className="w-4 h-4 text-neon-green" />
-                             <span className="text-[11px] sm:text-xs font-mono font-bold">{formatVE(item.timestamp)}</span>
+                           <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 opacity-90">
+                             <div className="flex items-center gap-1.5">
+                               <Clock className="w-4 h-4 text-neon-green" />
+                               <span className="text-[11px] sm:text-xs font-mono font-bold">{formatVE(item.timestamp)}</span>
+                             </div>
+                             {item.downtimeDuration && (
+                               <div className="flex items-center gap-1.5 bg-neon-green/10 px-2 py-0.5 rounded border border-neon-green/20">
+                                 <AlertTriangle className="w-3 h-3 text-neon-green" />
+                                 <span className="text-[9px] font-bold tracking-wider text-neon-green">CAÍDA: {item.downtimeDuration}</span>
+                               </div>
+                             )}
                            </div>
                            <span className={`text-[9px] font-black px-3 py-1 rounded border tracking-widest ${
                              item.status === 'up' ? 'bg-neon-green/10 text-neon-green border-neon-green/30' : 'bg-red-500/10 text-red-500 border-red-500/30 animate-pulse'
@@ -490,9 +501,17 @@ export default function App() {
                          <p className={`text-[10px] sm:text-xs font-medium leading-relaxed opacity-80 ${item.status === 'up' ? 'text-white/80' : 'text-red-300'}`}>
                            {item.message}
                          </p>
-                         <div className="flex items-center gap-2 mt-1.5 opacity-80">
-                           <Clock className={`w-3.5 h-3.5 ${item.status === 'up' ? 'text-neon-blue' : 'text-red-400'}`} />
-                           <span className={`text-[10px] sm:text-[11px] font-mono font-bold ${item.status === 'up' ? 'text-neon-blue/80' : 'text-red-400/80'}`}>{formatVE(item.timestamp)}</span>
+                         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-1.5 opacity-80">
+                           <div className="flex items-center gap-1.5">
+                             <Clock className={`w-3.5 h-3.5 ${item.status === 'up' ? 'text-neon-blue' : 'text-red-400'}`} />
+                             <span className={`text-[10px] sm:text-[11px] font-mono font-bold ${item.status === 'up' ? 'text-neon-blue/80' : 'text-red-400/80'}`}>{formatVE(item.timestamp)}</span>
+                           </div>
+                           {item.downtimeDuration && (
+                             <div className="flex items-center gap-1.5 bg-neon-blue/10 px-2 py-0.5 rounded border border-neon-blue/20">
+                               <AlertTriangle className="w-3 h-3 text-neon-blue" />
+                               <span className="text-[9px] font-bold tracking-wider text-neon-blue">TIEMPO CAÍDO: {item.downtimeDuration}</span>
+                             </div>
+                           )}
                          </div>
                        </div>
 
